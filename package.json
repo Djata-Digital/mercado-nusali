@@ -1,0 +1,60 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "npm --workspace=apps/api run start:dev",
+    "build": "vite build",
+    "build:api": "npm --workspace=apps/api run build",
+    "start": "vite preview",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "db:validate": "npm --workspace=apps/api run db:validate",
+    "db:generate": "npm --workspace=apps/api run db:generate",
+    "db:migrate": "npm --workspace=apps/api run db:migrate",
+    "db:deploy": "npm --workspace=apps/api run db:deploy",
+    "db:seed": "npm --workspace=apps/api run db:seed",
+    "test": "npm --workspace=apps/api run test",
+    "test:api": "npm --workspace=apps/api run test",
+    "test:e2e": "npm --workspace=apps/api run test:e2e",
+    "test:integration": "npm --workspace=apps/api run test:integration",
+    "check:frontend:production": "node tools/check-frontend-production-contract.cjs",
+    "check:production:readiness": "node tools/check-production-readiness.cjs",
+    "check:staging:env": "node tools/check-staging-env.cjs .env.staging",
+    "smoke:staging": "node tools/smoke-staging.cjs",
+    "release:staging:preflight": "npm run lint && npm run build && npm run build:api && npm run check:frontend:production && npm run check:production:readiness && npm run check:staging:env"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@tanstack/react-query": "^5.101.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "axios": "^1.19.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-router-dom": "^7.18.2",
+    "recharts": "^3.10.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3",
+    "@types/express": "^4.17.21"
+  }
+}

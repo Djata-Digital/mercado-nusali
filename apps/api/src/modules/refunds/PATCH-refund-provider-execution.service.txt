@@ -1,0 +1,56 @@
+  /**
+   * Sprint 7.4.3: aplica confirmação assíncrona do provider.
+   * COMPLETED é idempotente; FAILED nunca pode regredir um refund já concluído.
+   */
+  async applyProviderWebhookResult(
+    refundId: string,
+    outcome: 'COMPLETED' | 'FAILED',
+    reason = 'Provider confirmou falha do refund.',
+  ) {
+    const current = await this.refundTransaction.run(async (tx) =>
+      tx.refund.findUnique({
+        where: { id: refundId },
+      }),
+    );
+
+    if (!current) {
+      throw new NotFoundException('Registro de reembolso não encontrado.');
+    }
+
+    if (current.status === RefundStatus.COMPLETED) {
+      return current;
+    }
+
+    if (outcome === 'COMPLETED') {
+      if (current.status !== RefundStatus.PROCESSING) {
+        throw new ConflictException({
+          statusCode: 409,
+          message:
+            'Confirmação de refund concluído recebida fora de PROCESSING.',
+          errorCode: 'REFUND_WEBHOOK_INVALID_COMPLETION_STATE',
+        });
+      }
+
+      return this.finalizeCompleted(refundId);
+    }
+
+    if (current.status === RefundStatus.FAILED) {
+      return current;
+    }
+
+    if (current.status !== RefundStatus.PROCESSING) {
+      throw new ConflictException({
+        statusCode: 409,
+        message:
+          'Confirmação de falha do refund recebida fora de PROCESSING.',
+        errorCode: 'REFUND_WEBHOOK_INVALID_FAILURE_STATE',
+      });
+    }
+
+    await this.markFailed(refundId, reason);
+
+    return this.refundTransaction.run(async (tx) =>
+      tx.refund.findUniqueOrThrow({ where: { id: refundId } }),
+    );
+  }
+
