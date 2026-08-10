@@ -59,16 +59,24 @@ export class AuthService {
       throw new BadRequestException('País não encontrado ou não suportado.');
     }
 
-    const buyerRole = await this.prisma.role.findUnique({
-      where: { name: 'BUYER' },
+    const requestedRole = dto.role?.trim().toUpperCase();
+
+    if (!['BUYER', 'SELLER'].includes(requestedRole)) {
+      throw new BadRequestException('Role inválida. Utilize BUYER ou SELLER.');
+    }
+
+    const role = await this.prisma.role.findUnique({
+      where: { name: requestedRole },
     });
 
-    if (!buyerRole) {
-      throw new NotFoundException('Role padrão BUYER não configurada no sistema.');
+    if (!role) {
+      throw new NotFoundException(
+        `Role ${requestedRole} não configurada no sistema.`,
+      );
     }
 
     const passwordHash = await HashUtil.hashPassword(dto.password);
-    const sellerOnboardingStatus = dto.role === 'SELLER' ? 'pending' : null;
+    const sellerOnboardingStatus = requestedRole === 'SELLER' ? 'pending' : null;
 
     const user = await this.prisma.user.create({
       data: {
@@ -84,7 +92,7 @@ export class AuthService {
         preferredCurrencyId: country.defaultCurrencyId,
         roles: {
           create: {
-            roleId: buyerRole.id,
+            roleId: role.id,
           },
         },
       },
@@ -133,7 +141,7 @@ export class AuthService {
       action: 'REGISTER',
       entity: 'User',
       entityId: user.id,
-      newValue: { email: user.email, role: 'BUYER', sellerOnboardingStatus },
+      newValue: { email: user.email, role: requestedRole, sellerOnboardingStatus,},
       ipAddress: reqInfo.ipAddress,
       userAgent: reqInfo.userAgent,
       country: dto.country,

@@ -234,6 +234,58 @@ async function main() {
     permMap[perm.slug] = created.id;
   }
 
+  // 5a. Base RBAC mappings
+
+  const rolePermissionMap: Record<string, string[]> = {
+    BUYER: [
+      'address:read:self',
+      'address:create:self',
+      'address:update:self',
+      'address:delete:self',
+      'cart:manage:self',
+      'checkout:create:self',
+    ],
+
+    SELLER: [
+      'seller:read:self',
+      'seller:update:self',
+      'kyc:upload:self',
+      'kyc:read:self',
+    ],
+  };
+
+  for (const [roleName, permissionSlugs] of Object.entries(rolePermissionMap)) {
+    const roleId = roleMap[roleName];
+
+    if (!roleId) {
+      throw new Error(`Role ${roleName} não encontrada durante o seed.`);
+    }
+
+    for (const permissionSlug of permissionSlugs) {
+      const permissionId = permMap[permissionSlug];
+
+      if (!permissionId) {
+        throw new Error(
+          `Permission ${permissionSlug} não encontrada durante o seed.`,
+        );
+      }
+
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId,
+            permissionId,
+          },
+        },
+        update: {},
+        create: {
+          roleId,
+          permissionId,
+        },
+      });
+    }
+  }
+
   // 5b. Optional Sprint 5.3 Roles
   const optionalRoles = [
     { name: 'DRIVER', description: 'Motorista de entregas e coletas' },
