@@ -71,7 +71,7 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`🚀 Mercado Nusali API executando na porta ${port} com prefixo /${apiPrefix}`);
   if (swaggerEnabled) {
     logger.log(`📚 Swagger habilitado em /docs`);
