@@ -71,7 +71,6 @@ export class SellerDocumentsController {
   }
 
   @Get('seller-documents/:id/download-url')
-  @Permissions('kyc:read:self')
   @ApiOperation({ summary: 'Gerar URL assinada temporária para download seguro' })
   async getDownloadUrl(
     @CurrentUser('id') userId: string,
