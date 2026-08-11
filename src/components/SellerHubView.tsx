@@ -16,6 +16,7 @@ import { StoresApi } from '../api/clients/StoresApi';
 import { ProductsApi } from '../api/clients/ProductsApi';
 import { OrdersApi } from '../api/clients/OrdersApi';
 import { SellerProductWizard } from './seller/SellerProductWizard';
+import { SellerOnboardingForm } from './seller/SellerOnboardingForm';
 
 type Section = 'overview' | 'products' | 'orders' | 'account';
 
@@ -129,13 +130,42 @@ export const SellerHubView: React.FC = () => {
   }
 
   if (profileQuery.isError || !profile) {
+    const status = (profileQuery.error as any)?.response?.status;
+
+    if (status === 404) {
+      return (
+        <SellerOnboardingForm
+          onCreated={async () => {
+            await queryClient.invalidateQueries({
+              queryKey: ['seller-profile-real'],
+            });
+
+            await profileQuery.refetch();
+          }}
+        />
+      );
+    }
+
     return (
       <div className="max-w-3xl mx-auto p-8 text-center bg-white border border-gray-200 rounded-2xl mt-10">
-        <ShieldCheck className="w-14 h-14 text-amber-400 mx-auto mb-4" />
-        <h1 className="text-xl font-black text-gray-900">Perfil de vendedor não disponível</h1>
+        <ShieldCheck className="w-14 h-14 text-red-400 mx-auto mb-4" />
+
+        <h1 className="text-xl font-black text-gray-900">
+          Não foi possível carregar o perfil
+        </h1>
+
         <p className="text-sm text-gray-500 mt-2">
-          O portal real exige um SellerProfile válido associado à conta autenticada.
+          O Mercado Nusali não conseguiu consultar seu perfil de
+          vendedor neste momento.
         </p>
+
+        <button
+          type="button"
+          onClick={() => void profileQuery.refetch()}
+          className="mt-5 px-5 py-3 bg-emerald-600 text-white rounded-xl text-xs font-black"
+        >
+          Tentar novamente
+        </button>
       </div>
     );
   }

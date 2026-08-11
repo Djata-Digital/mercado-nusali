@@ -43,6 +43,20 @@ export interface SellerDocumentReal {
 }
 
 export class SellerApi {
+  static createOnboarding(data: {
+    sellerType: string;
+    legalName: string;
+    countryCode: string;
+    tradeName?: string;
+    taxId?: string;
+    registrationNumber?: string;
+    businessEmail?: string;
+    businessPhone?: string;
+    website?: string;
+    description?: string;
+  }): Promise<ApiResponse<SellerProfileReal>> {
+    return apiClient.post('/sellers/onboarding', data);
+  }
   static getMyProfile(): Promise<ApiResponse<SellerProfileReal>> {
     return apiClient.get('/sellers/me');
   }
