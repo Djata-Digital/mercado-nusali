@@ -83,16 +83,11 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      if (!loggedUser.isPhoneVerified) {
-        setSuccessMessage('Login bem-sucedido. Redirecionando para verificação de telefone...');
-        setTimeout(() => navigate('/verify-phone'), 1200);
-        return;
-      }
-
       setSuccessMessage('Autenticado com sucesso no Mercado Nusali!');
       setTimeout(() => {
+
         if (loggedUser.role === 'SELLER') {
-          navigate(from !== '/' ? from : '/seller/dashboard');
+          navigate(from !== '/' ? from : '/seller');
         } else if (loggedUser.role === 'ADMIN') {
           navigate(from !== '/' ? from : '/admin/dashboard');
         } else {

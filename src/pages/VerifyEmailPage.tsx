@@ -284,7 +284,7 @@ export const VerifyEmailPage: React.FC = () => {
       );
 
       setTimeout(() => {
-        navigate('/verify-phone');
+        navigate('/seller');
       }, 1500);
     } catch (error: any) {
       setErrorMessage(extractErrorMessage(error));
@@ -485,10 +485,10 @@ export const VerifyEmailPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => navigate('/verify-phone')}
+                onClick={() => navigate('/seller')}
                 className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 rounded-xl text-xs transition cursor-pointer"
               >
-                Avançar para Verificação de Telefone
+                Continuar para o Portal do Vendedor
               </button>
             </div>
           )}
