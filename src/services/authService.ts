@@ -85,10 +85,15 @@ export const AuthService = {
     return res;
   },
 
-  async resendVerification(type: 'email' | 'phone'): Promise<ApiResponse<{ message: string }>> {
+  async resendVerification(
+    type: 'email' | 'phone',
+  ): Promise<ApiResponse<{ message: string; challengeId?: string }>> {
     if (API_CONFIG.USE_FAKE_API) {
-      return fakeApi.resendVerification(type);
+      return fakeApi.resendVerification(type) as Promise<
+        ApiResponse<{ message: string; challengeId?: string }>
+      >;
     }
+
     return AuthApi.resendVerification(type);
   },
 

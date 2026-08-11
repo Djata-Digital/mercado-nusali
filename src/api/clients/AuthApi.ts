@@ -54,7 +54,9 @@ export class AuthApi {
     return apiClient.post('/auth/verify-phone', data);
   }
 
-  static async resendVerification(type: 'email' | 'phone'): Promise<ApiResponse<{ message: string }>> {
+  static async resendVerification(
+    type: 'email' | 'phone',
+  ): Promise<ApiResponse<{ message: string; challengeId: string }>> {
     return apiClient.post('/auth/resend-verification', { type });
   }
 

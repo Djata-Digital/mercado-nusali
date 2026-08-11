@@ -489,9 +489,8 @@ export interface ResetPasswordRequest {
 }
 
 export interface VerifyEmailRequest {
+  challengeId: string;
   code: string;
-  token?: string;
-  email?: string;
 }
 
 export interface VerifyPhoneRequest {
