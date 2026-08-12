@@ -749,6 +749,13 @@ async function main() {
       'seller:update:self',
       'kyc:upload:self',
       'kyc:read:self',
+
+      // O vendedor também é dono dos seus próprios endereços.
+      // Necessário para endereço fiscal/comercial da Central do Vendedor.
+      'address:read:self',
+      'address:create:self',
+      'address:update:self',
+      'address:delete:self',
     ],
 
     KYC_ANALYST: [

@@ -4,17 +4,88 @@ export interface SellerProfileReal {
   id: string;
   userId: string;
   countryId: string;
+
+  sellerType: string;
   legalName: string;
   tradeName?: string | null;
-  description?: string | null;
+  taxId?: string | null;
+  registrationNumber?: string | null;
+
   status: string;
+  verificationLevel: number;
+  onboardingStatus?: string;
+
+  businessEmail?: string | null;
+  businessPhone?: string | null;
+  website?: string | null;
+  description?: string | null;
+
   averageRating: string | number;
   totalReviews: number;
   totalSales: number;
+
   createdAt: string;
   updatedAt: string;
-  country?: { id: string; code: string; name: string };
-  stores?: Array<{ id: string; name: string; slug: string; status: string }>;
+
+  country?: {
+    id: string;
+    code: string;
+    name: string;
+    flag?: string;
+    phonePrefix?: string;
+  };
+
+  user?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    phoneCode: string;
+
+    preferredCurrency?: {
+      id: string;
+      code: string;
+      name: string;
+      symbol: string;
+    } | null;
+
+    addresses?: Array<{
+      id: string;
+      label?: string | null;
+      recipientName: string;
+      phone: string;
+      phoneCode: string;
+      countryId: string;
+
+      country?: {
+        id: string;
+        code: string;
+        name: string;
+        phonePrefix?: string;
+      };
+
+      region: string;
+      city: string;
+      district?: string | null;
+      neighborhood?: string | null;
+      street: string;
+      number: string;
+      complement?: string | null;
+      postalCode?: string | null;
+
+      isDefault: boolean;
+      type: string;
+    }>;
+  };
+
+  stores?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+  }>;
+
   documents?: Array<{
     id: string;
     documentType?: string;
@@ -62,11 +133,16 @@ export class SellerApi {
   }
 
   static updateMyProfile(data: {
+    legalName?: string;
     tradeName?: string;
-    description?: string;
+    sellerType?: string;
+    taxId?: string;
     businessEmail?: string;
     businessPhone?: string;
     website?: string;
+    description?: string;
+    countryCode?: string;
+    preferredCurrencyCode?: string;
   }): Promise<ApiResponse<SellerProfileReal>> {
     return apiClient.patch('/sellers/me', data);
   }

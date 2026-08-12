@@ -80,29 +80,123 @@ export class SellerProfilesService {
         country: true,
         documents: true,
         stores: true,
+
+        user: {
+          include: {
+            preferredCurrency: true,
+
+            addresses: {
+              where: {
+                deletedAt: null,
+                isActive: true,
+                type: 'COMMERCIAL',
+              },
+              include: {
+                country: true,
+              },
+              orderBy: {
+                updatedAt: 'desc',
+              },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
     if (!seller) {
-      throw new NotFoundException('Perfil de vendedor não encontrado.');
+      throw new NotFoundException(
+        'Perfil de vendedor não encontrado.',
+      );
     }
 
     return seller;
   }
 
-  async updateMyProfile(userId: string, dto: UpdateSellerProfileDto, reqInfo: any) {
+  async updateMyProfile(
+    userId: string,
+    dto: UpdateSellerProfileDto,
+    reqInfo: any,
+  ) {
     const seller = await this.prisma.sellerProfile.findUnique({
       where: { userId },
     });
 
     if (!seller) {
-      throw new NotFoundException('Perfil de vendedor não encontrado.');
+      throw new NotFoundException(
+        'Perfil de vendedor não encontrado.',
+      );
     }
 
-    const updated = await this.prisma.sellerProfile.update({
-      where: { id: seller.id },
-      data: dto,
-      include: { country: true },
+    const {
+      countryCode,
+      preferredCurrencyCode,
+      ...sellerData
+    } = dto;
+
+    let countryId: string | undefined;
+    let preferredCurrencyId: string | undefined;
+
+    if (countryCode) {
+      const country = await this.prisma.country.findUnique({
+        where: {
+          code: countryCode.trim().toUpperCase(),
+        },
+      });
+
+      if (!country) {
+        throw new BadRequestException(
+          'País informado não existe ou não é suportado.',
+        );
+      }
+
+      countryId = country.id;
+    }
+
+    if (preferredCurrencyCode) {
+      const currency = await this.prisma.currency.findUnique({
+        where: {
+          code: preferredCurrencyCode.trim().toUpperCase(),
+        },
+      });
+
+      if (!currency) {
+        throw new BadRequestException(
+          'Moeda informada não existe ou não é suportada.',
+        );
+      }
+
+      preferredCurrencyId = currency.id;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.sellerProfile.update({
+        where: {
+          id: seller.id,
+        },
+
+        data: {
+          ...sellerData,
+
+          ...(countryId
+            ? {
+                countryId,
+              }
+            : {}),
+        },
+      });
+
+      if (preferredCurrencyId) {
+        await tx.user.update({
+          where: {
+            id: userId,
+          },
+
+          data: {
+            preferredCurrencyId,
+          },
+        });
+      }
     });
 
     await this.auditService.log({
@@ -110,13 +204,24 @@ export class SellerProfilesService {
       action: 'SELLER_PROFILE_UPDATED',
       entity: 'SellerProfile',
       entityId: seller.id,
-      previousValue: { tradeName: seller.tradeName, description: seller.description },
+
+      previousValue: {
+        legalName: seller.legalName,
+        tradeName: seller.tradeName,
+        sellerType: seller.sellerType,
+        taxId: seller.taxId,
+        countryId: seller.countryId,
+        businessEmail: seller.businessEmail,
+        businessPhone: seller.businessPhone,
+      },
+
       newValue: dto,
+
       ipAddress: reqInfo.ipAddress,
       userAgent: reqInfo.userAgent,
     });
 
-    return updated;
+    return this.getMyProfile(userId);
   }
 
   async getById(id: string) {

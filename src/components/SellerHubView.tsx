@@ -1,11 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 
 import { SellerApi } from '../api/clients/SellerApi';
 import { StoresApi } from '../api/clients/StoresApi';
 import { ProductsApi } from '../api/clients/ProductsApi';
 import { OrdersApi } from '../api/clients/OrdersApi';
+import { AddressesApi } from '../api/clients/AddressesApi';
 
 import {
   SellerSidebar,
@@ -53,7 +58,10 @@ import {
   SellerQuestion,
 } from '../data/mockSellerData';
 
-import { CurrencyCode, CountryCode } from '../types';
+import {
+  CurrencyCode,
+  CountryCode,
+} from '../types';
 
 const mapSellerType = (
   value?: string,
@@ -107,13 +115,17 @@ export const SellerHubView: React.FC = () => {
     useState<string | null>(null);
 
   const [team, setTeam] =
-    useState<SellerTeamMember[]>(initialSellerTeam);
+    useState<SellerTeamMember[]>(
+      initialSellerTeam,
+    );
 
   const [warehouses] =
     useState(initialWarehouses);
 
   const [questions, setQuestions] =
-    useState<SellerQuestion[]>(initialSellerQuestions);
+    useState<SellerQuestion[]>(
+      initialSellerQuestions,
+    );
 
   const [customers] =
     useState(initialSellerCustomers);
@@ -122,7 +134,8 @@ export const SellerHubView: React.FC = () => {
     queryKey: ['seller-profile-real'],
 
     queryFn: async () => {
-      const response = await SellerApi.getMyProfile();
+      const response =
+        await SellerApi.getMyProfile();
 
       return response.data;
     },
@@ -134,7 +147,8 @@ export const SellerHubView: React.FC = () => {
     queryKey: ['seller-stores-real'],
 
     queryFn: async () => {
-      const response = await StoresApi.listMine();
+      const response =
+        await StoresApi.listMine();
 
       return response.data || [];
     },
@@ -146,10 +160,11 @@ export const SellerHubView: React.FC = () => {
     queryKey: ['seller-products-real'],
 
     queryFn: async () => {
-      const response = await ProductsApi.listMine({
-        page: 1,
-        limit: 100,
-      } as any);
+      const response =
+        await ProductsApi.listMine({
+          page: 1,
+          limit: 100,
+        } as any);
 
       const data: any = response.data;
 
@@ -181,7 +196,8 @@ export const SellerHubView: React.FC = () => {
     retry: false,
   });
 
-  const profileReal = profileQuery.data;
+  const profileReal =
+    profileQuery.data;
 
   const storesReal: any[] =
     storesQuery.data || [];
@@ -197,11 +213,18 @@ export const SellerHubView: React.FC = () => {
       !selectedStoreId &&
       storesReal[0]?.id
     ) {
-      setSelectedStoreId(storesReal[0].id);
+      setSelectedStoreId(
+        storesReal[0].id,
+      );
     }
-  }, [storesReal, selectedStoreId]);
+  }, [
+    storesReal,
+    selectedStoreId,
+  ]);
 
-  const showToast = (message: string) => {
+  const showToast = (
+    message: string,
+  ) => {
     setToastMessage(message);
 
     window.setTimeout(() => {
@@ -216,6 +239,13 @@ export const SellerHubView: React.FC = () => {
       return null;
     }
 
+    const commercialAddress =
+      profileReal.user?.addresses?.find(
+        (item) =>
+          item.type === 'COMMERCIAL',
+      ) ||
+      profileReal.user?.addresses?.[0];
+
     return {
       id: profileReal.id,
 
@@ -229,11 +259,11 @@ export const SellerHubView: React.FC = () => {
         profileReal.legalName,
 
       sellerType: mapSellerType(
-        (profileReal as any).sellerType,
+        profileReal.sellerType,
       ),
 
       taxId:
-        (profileReal as any).taxId || '',
+        profileReal.taxId || '',
 
       country:
         (
@@ -241,27 +271,49 @@ export const SellerHubView: React.FC = () => {
           'GW'
         ) as CountryCode,
 
-      city: '',
+      city:
+        commercialAddress?.city ||
+        '',
 
-      address: '',
+      address:
+        commercialAddress
+          ? [
+              commercialAddress.street,
+              commercialAddress.number,
+              commercialAddress.complement,
+            ]
+              .filter(Boolean)
+              .join(', ')
+          : '',
 
       phone:
-        (profileReal as any)
-          .businessPhone || '',
+        profileReal.businessPhone ||
+        '',
 
       email:
-        (profileReal as any)
-          .businessEmail || '',
+        profileReal.businessEmail ||
+        '',
 
-      kycStatus: mapKycStatus(
-        profileReal.status,
-      ),
+      kycStatus:
+        mapKycStatus(
+          profileReal.status,
+        ),
 
       kycLevel:
-        'Nível 3 - Vendedor Global Verificado',
+        profileReal.status ===
+        'VERIFIED'
+          ? `Nível ${
+              profileReal.verificationLevel ||
+              1
+            } - Vendedor Verificado`
+          : `Nível ${
+              profileReal.verificationLevel ||
+              1
+            } - Verificação pendente`,
 
       verificationDate:
-        profileReal.status === 'VERIFIED'
+        profileReal.status ===
+        'VERIFIED'
           ? new Date(
               profileReal.updatedAt,
             ).toLocaleDateString(
@@ -273,7 +325,8 @@ export const SellerHubView: React.FC = () => {
 
       reputationScore:
         Number(
-          profileReal.averageRating || 0,
+          profileReal.averageRating ||
+          0,
         ),
 
       authorizedCountries: [
@@ -284,7 +337,12 @@ export const SellerHubView: React.FC = () => {
       ],
 
       preferredCurrency:
-        'XOF' as CurrencyCode,
+        (
+          profileReal.user
+            ?.preferredCurrency
+            ?.code ||
+          'XOF'
+        ) as CurrencyCode,
 
       payoutMethods: [],
 
@@ -318,7 +376,8 @@ export const SellerHubView: React.FC = () => {
           '',
 
         description:
-          store.description || '',
+          store.description ||
+          '',
 
         category:
           store.category?.name ||
@@ -344,16 +403,20 @@ export const SellerHubView: React.FC = () => {
           store.email || '',
 
         openingHours:
-          store.openingHours || '',
+          store.openingHours ||
+          '',
 
         exchangePolicy:
-          store.exchangePolicy || '',
+          store.exchangePolicy ||
+          '',
 
         warrantyPolicy:
-          store.warrantyPolicy || '',
+          store.warrantyPolicy ||
+          '',
 
         returnPolicy:
-          store.returnPolicy || '',
+          store.returnPolicy ||
+          '',
 
         status:
           store.status === 'ACTIVE'
@@ -375,7 +438,8 @@ export const SellerHubView: React.FC = () => {
 
         followersCount:
           Number(
-            store.followersCount || 0,
+            store.followersCount ||
+            0,
           ),
 
         salesCount:
@@ -396,7 +460,10 @@ export const SellerHubView: React.FC = () => {
           [],
       }),
     );
-  }, [storesReal, profile]);
+  }, [
+    storesReal,
+    profile,
+  ]);
 
   const selectedStore =
     stores.find(
@@ -408,7 +475,8 @@ export const SellerHubView: React.FC = () => {
   const pendingQuestionsCount =
     questions.filter(
       (question) =>
-        question.status === 'pending',
+        question.status ===
+        'pending',
     ).length;
 
   const handleAnswerQuestion = (
@@ -416,16 +484,19 @@ export const SellerHubView: React.FC = () => {
     text: string,
   ) => {
     setQuestions((current) =>
-      current.map((question) =>
-        question.id === id
-          ? {
-              ...question,
-              answerText: text,
-              answerDate:
-                'Agora mesmo',
-              status: 'answered',
-            }
-          : question,
+      current.map(
+        (question) =>
+          question.id === id
+            ? {
+                ...question,
+                answerText:
+                  text,
+                answerDate:
+                  'Agora mesmo',
+                status:
+                  'answered',
+              }
+            : question,
       ),
     );
   };
@@ -516,13 +587,15 @@ export const SellerHubView: React.FC = () => {
         <ShieldCheck className="w-14 h-14 text-red-400 mx-auto mb-4" />
 
         <h1 className="text-xl font-black text-gray-900">
-          Não foi possível carregar o perfil
+          Não foi possível carregar
+          o perfil
         </h1>
 
         <p className="text-sm text-gray-500 mt-2">
-          O Mercado Nusali não conseguiu
-          consultar seu perfil de vendedor
-          neste momento.
+          O Mercado Nusali não
+          conseguiu consultar seu
+          perfil de vendedor neste
+          momento.
         </p>
 
         <button
@@ -618,10 +691,213 @@ export const SellerHubView: React.FC = () => {
           'account' && (
           <SellerAccount
             profile={profile}
-            onUpdateProfile={() => {
-              showToast(
-                'A edição completa da conta será ligada ao PATCH /sellers/me na próxima etapa.',
-              );
+            onUpdateProfile={async (
+              updatedProfile,
+            ) => {
+              try {
+                const sellerTypeMap: Record<
+                  string,
+                  string
+                > = {
+                  pessoa_fisica:
+                    'INDIVIDUAL',
+
+                  empresa_individual:
+                    'SOLE_PROPRIETOR',
+
+                  sociedade:
+                    'COMPANY',
+
+                  marca_oficial:
+                    'OFFICIAL_BRAND',
+
+                  vendedor_internacional:
+                    'INTERNATIONAL',
+                };
+
+                const sellerResponse =
+                  await SellerApi.updateMyProfile(
+                    {
+                      legalName:
+                        updatedProfile.fullName,
+
+                      tradeName:
+                        updatedProfile.commercialName,
+
+                      sellerType:
+                        sellerTypeMap[
+                          updatedProfile
+                            .sellerType
+                        ],
+
+                      taxId:
+                        updatedProfile.taxId,
+
+                      businessPhone:
+                        updatedProfile.phone,
+
+                      businessEmail:
+                        updatedProfile.email,
+
+                      countryCode:
+                        updatedProfile.country,
+
+                      preferredCurrencyCode:
+                        updatedProfile.preferredCurrency,
+                    },
+                  );
+
+                const refreshedSeller =
+                  sellerResponse.data;
+
+                const existingCommercialAddress =
+                  profileReal.user?.addresses?.find(
+                    (item) =>
+                      item.type ===
+                      'COMMERCIAL',
+                  );
+
+                const newCountryId =
+                  refreshedSeller?.country
+                    ?.id ||
+                  profileReal.country?.id;
+
+                const newPhonePrefix =
+                  refreshedSeller?.country
+                    ?.phonePrefix ||
+                  profileReal.country
+                    ?.phonePrefix ||
+                  '+245';
+
+                if (
+                  updatedProfile.city.trim() &&
+                  updatedProfile.address.trim() &&
+                  newCountryId
+                ) {
+                  const addressData = {
+                    label:
+                      'Sede Comercial',
+
+                    recipientName:
+                      updatedProfile.fullName,
+
+                    phone:
+                      updatedProfile.phone.replace(
+                        /^\+\d+\s*/,
+                        '',
+                      ),
+
+                    phoneCode:
+                      newPhonePrefix,
+
+                    countryId:
+                      newCountryId,
+
+                    region:
+                      updatedProfile.city,
+
+                    city:
+                      updatedProfile.city,
+
+                    street:
+                      updatedProfile.address,
+
+                    number:
+                      existingCommercialAddress
+                        ?.number ||
+                      'S/N',
+
+                    isDefault: true,
+
+                    type:
+                      'COMMERCIAL' as const,
+                  };
+
+                  if (
+                    existingCommercialAddress
+                  ) {
+                    const countryChanged =
+                      existingCommercialAddress.countryId !==
+                      newCountryId;
+
+                    if (
+                      countryChanged
+                    ) {
+                      await AddressesApi.delete(
+                        existingCommercialAddress.id,
+                      );
+
+                      await AddressesApi.create(
+                        addressData,
+                      );
+                    } else {
+                      await AddressesApi.update(
+                        existingCommercialAddress.id,
+                        {
+                          label:
+                            addressData.label,
+
+                          recipientName:
+                            addressData.recipientName,
+
+                          phone:
+                            addressData.phone,
+
+                          phoneCode:
+                            addressData.phoneCode,
+
+                          region:
+                            addressData.region,
+
+                          city:
+                            addressData.city,
+
+                          street:
+                            addressData.street,
+
+                          number:
+                            addressData.number,
+
+                          isDefault:
+                            true,
+
+                          type:
+                            'COMMERCIAL',
+                        },
+                      );
+                    }
+                  } else {
+                    await AddressesApi.create(
+                      addressData,
+                    );
+                  }
+                }
+
+                await queryClient.invalidateQueries(
+                  {
+                    queryKey: [
+                      'seller-profile-real',
+                    ],
+                  },
+                );
+
+                await profileQuery.refetch();
+
+                showToast(
+                  'Dados da conta de vendedor salvos com sucesso.',
+                );
+              } catch (
+                error: any
+              ) {
+                showToast(
+                  error?.response?.data
+                    ?.error?.message ||
+                    error?.response?.data
+                      ?.message ||
+                    error?.message ||
+                    'Não foi possível salvar os dados do vendedor.',
+                );
+              }
             }}
             showToast={showToast}
             onNavigateSection={
@@ -630,7 +906,8 @@ export const SellerHubView: React.FC = () => {
           />
         )}
 
-        {activeSection === 'kyc' && (
+        {activeSection ===
+          'kyc' && (
           <SellerKyc
             profile={profile}
             showToast={showToast}
@@ -660,7 +937,9 @@ export const SellerHubView: React.FC = () => {
                 'A atualização da loja será conectada ao backend na próxima etapa.',
               );
             }}
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
@@ -672,7 +951,9 @@ export const SellerHubView: React.FC = () => {
             onAddMember={
               handleAddTeamMember
             }
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
@@ -686,7 +967,8 @@ export const SellerHubView: React.FC = () => {
                 </h1>
 
                 <p className="text-xs text-gray-500 mt-1">
-                  Produtos carregados do backend real.
+                  Produtos carregados do
+                  backend real.
                 </p>
               </div>
 
@@ -705,12 +987,15 @@ export const SellerHubView: React.FC = () => {
 
             {!productsReal.length ? (
               <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center text-sm text-gray-500">
-                Nenhum produto cadastrado.
+                Nenhum produto
+                cadastrado.
               </div>
             ) : (
               <div className="bg-white border border-gray-200 rounded-2xl divide-y divide-gray-100">
                 {productsReal.map(
-                  (product: any) => (
+                  (
+                    product: any,
+                  ) => (
                     <div
                       key={
                         product.id
@@ -724,7 +1009,8 @@ export const SellerHubView: React.FC = () => {
                       </div>
 
                       <div className="text-xs text-gray-500 mt-1">
-                        {product.store
+                        {product
+                          .store
                           ?.name ||
                           'Loja'}{' '}
                         •{' '}
@@ -781,7 +1067,9 @@ export const SellerHubView: React.FC = () => {
             warehouses={
               warehouses
             }
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
@@ -794,20 +1082,26 @@ export const SellerHubView: React.FC = () => {
               </h1>
 
               <p className="text-xs text-gray-500 mt-1">
-                Pedidos carregados do backend real.
+                Pedidos carregados do
+                backend real.
               </p>
             </div>
 
             {!ordersReal.length ? (
               <div className="p-10 text-center text-sm text-gray-500">
-                Nenhum pedido encontrado.
+                Nenhum pedido
+                encontrado.
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
                 {ordersReal.map(
-                  (order: any) => (
+                  (
+                    order: any,
+                  ) => (
                     <div
-                      key={order.id}
+                      key={
+                        order.id
+                      }
                       className="p-5 grid sm:grid-cols-3 gap-4 text-xs"
                     >
                       <div>
@@ -855,7 +1149,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'sales' && (
           <SellerSalesAnalytics
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -865,14 +1161,18 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'logistics' && (
           <SellerLogisticsFulfillment
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'returns' && (
           <SellerReturnsManager
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -882,7 +1182,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'disputes' && (
           <SellerDisputesManager
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -895,14 +1197,18 @@ export const SellerHubView: React.FC = () => {
             selectedCurrency={
               selectedCurrency
             }
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'wallet' && (
           <SellerWallet
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -912,7 +1218,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'payouts' && (
           <SellerPayouts
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -922,7 +1230,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'invoices' && (
           <SellerInvoices
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             selectedCurrency={
               selectedCurrency
             }
@@ -932,35 +1242,45 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'promos' && (
           <SellerPromotions
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'coupons' && (
           <SellerCoupons
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'campaigns' && (
           <SellerCampaigns
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'ads' && (
           <SellerAds
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'customers' && (
           <SellerCustomers
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             customers={
               customers
             }
@@ -970,7 +1290,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'questions' && (
           <SellerQuestions
-            showToast={showToast}
+            showToast={
+              showToast
+            }
             questions={
               questions
             }
@@ -983,36 +1305,48 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'reviews' && (
           <SellerReviews
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'messages' && (
           <SellerMessages
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'notifications' && (
           <SellerNotifications
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'reports' && (
           <SellerReports
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
 
         {activeSection ===
           'settings' && (
           <SellerSettings
-            showToast={showToast}
-            profile={profile}
+            showToast={
+              showToast
+            }
+            profile={
+              profile
+            }
             onUpdateProfile={() => {
               showToast(
                 'Configurações serão persistidas no backend na etapa correspondente.',
@@ -1024,7 +1358,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'help' && (
           <SellerHelpCenter
-            showToast={showToast}
+            showToast={
+              showToast
+            }
           />
         )}
       </main>
