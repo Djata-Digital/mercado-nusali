@@ -6,6 +6,8 @@ import { AdminBrandsManager } from './admin/AdminBrandsManager';
 import { AdminOrdersManager } from './admin/AdminOrdersManager';
 import { AdminStoresManager } from './admin/AdminStoresManager';
 import { AdminWarehousesManager } from './admin/AdminWarehousesManager';
+import { AdminUsersManager } from './admin/AdminUsersManager';
+import { AdminRolesPermissions } from './admin/AdminRolesPermissions';
 import {
   CheckCircle2,
   Clock3,
@@ -17,6 +19,7 @@ import {
   ShieldCheck,
   Store,
   Truck,
+  Users,
   XCircle,
 } from 'lucide-react';
 import { FulfillmentCoreView } from './admin/FulfillmentCoreView';
@@ -39,7 +42,9 @@ type Tab =
   | 'brands'
   | 'stores'
   | 'orders'
-  | 'warehouses';
+  | 'warehouses'
+  | 'users'
+  | 'access';
 
 const date = (value?: string | null) =>
   value
@@ -265,6 +270,16 @@ export const AdminDashboardView: React.FC = () => {
       icon: <Truck className="w-4 h-4" />,
     },
     {
+      id: 'users',
+      label: 'Usuários',
+      icon: <Users className="w-4 h-4" />,
+    },
+    {
+      id: 'access',
+      label: 'Roles & Permissões',
+      icon: <ShieldCheck className="w-4 h-4" />,
+    },
+    {
       id: 'audit',
       label: 'Auditoria',
       icon: <History className="w-4 h-4" />,
@@ -434,6 +449,18 @@ export const AdminDashboardView: React.FC = () => {
 
       {tab === 'warehouses' && (
         <AdminWarehousesManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'users' && (
+        <AdminUsersManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'access' && (
+        <AdminRolesPermissions
           showToast={setMessage}
         />
       )}

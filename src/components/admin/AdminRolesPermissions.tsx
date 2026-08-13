@@ -1,275 +1,716 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Plus, CheckCircle2, Lock, Edit2, Trash2, X, Check } from 'lucide-react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  Check,
+  Edit2,
+  Loader2,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  X,
+} from 'lucide-react';
+
+import {
+  AdminPermissionReal,
+  AdminRoleReal,
+  AdminUsersApi,
+} from '../../api/clients/AdminUsersApi';
 
 interface AdminRolesPermissionsProps {
   showToast: (msg: string) => void;
 }
 
-interface RoleItem {
-  id: string;
-  name: string;
-  users: number;
-  desc: string;
-  permissions: string[];
-}
+const PROTECTED_ROLES = new Set([
+  'GLOBAL_ADMIN',
+  'ADMIN',
+  'BUYER',
+  'SELLER',
+]);
 
-export const AdminRolesPermissions: React.FC<AdminRolesPermissionsProps> = ({ showToast }) => {
-  const [roles, setRoles] = useState<RoleItem[]>([
-    {
-      id: 'ROL-1',
-      name: 'Administrador Global',
-      users: 2,
-      desc: 'Acesso irrestrito a todas as funções CPLP',
-      permissions: ['KYC', 'Escrow', 'Financeiro', 'Usuários', 'Configurações', 'Catálogo']
-    },
-    {
-      id: 'ROL-2',
-      name: 'Representante Nacional (Country Manager)',
-      users: 4,
-      desc: 'Acesso completo ao país sob sua jurisdição',
-      permissions: ['KYC', 'Escrow', 'Vendedores', 'Relatórios Nacionais']
-    },
-    {
-      id: 'ROL-3',
-      name: 'Supervisor Regional',
-      users: 18,
-      desc: 'Gestão de vendedores e logística da região',
-      permissions: ['Vendedores', 'Logística', 'Suporte']
-    },
-    {
-      id: 'ROL-4',
-      name: 'Analista de KYC & Risco',
-      users: 5,
-      desc: 'Aprovação de documentos e verificação de fraude',
-      permissions: ['KYC', 'Moderação', 'Antifraude']
-    },
-    {
-      id: 'ROL-5',
-      name: 'Mediador de Disputas',
-      users: 6,
-      desc: 'Resolução de reclamações e liberação de Escrow',
-      permissions: ['Disputas', 'Escrow', 'Suporte']
-    }
-  ]);
+const unwrapItems = <T,>(
+  response: any,
+): T[] => {
+  const data = response?.data;
 
-  const allAvailablePermissions = [
-    'KYC',
-    'Escrow',
-    'Financeiro',
-    'Usuários',
-    'Configurações',
-    'Catálogo',
-    'Moderação',
-    'Disputas',
-    'Logística',
-    'Marketing',
-    'Suporte'
-  ];
+  if (Array.isArray(data)) {
+    return data;
+  }
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<RoleItem | null>(null);
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
 
-  const [name, setName] = useState('');
-  const [desc, setDesc] = useState('');
-  const [selectedPerms, setSelectedPerms] = useState<string[]>([]);
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
 
-  const handleOpenCreate = () => {
-    setEditingRole(null);
-    setName('');
-    setDesc('');
-    setSelectedPerms(['Suporte', 'Relatórios']);
-    setIsModalOpen(true);
-  };
+  return [];
+};
 
-  const handleOpenEdit = (r: RoleItem) => {
-    setEditingRole(r);
-    setName(r.name);
-    setDesc(r.desc);
-    setSelectedPerms(r.permissions);
-    setIsModalOpen(true);
-  };
+const getErrorMessage = (error: any) =>
+  error?.response?.data?.error?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
 
-  const togglePermission = (perm: string) => {
-    setSelectedPerms(prev =>
-      prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]
+const rolePermissionSlugs = (
+  role: AdminRoleReal,
+) =>
+  (role.permissions || [])
+    .map(
+      (item) =>
+        item.permission?.slug,
+    )
+    .filter(Boolean);
+
+export const AdminRolesPermissions:
+React.FC<
+  AdminRolesPermissionsProps
+> = ({
+  showToast,
+}) => {
+  const [roles, setRoles] =
+    useState<AdminRoleReal[]>([]);
+
+  const [
+    permissions,
+    setPermissions,
+  ] =
+    useState<
+      AdminPermissionReal[]
+    >([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [search, setSearch] =
+    useState('');
+
+  const [modalOpen, setModalOpen] =
+    useState(false);
+
+  const [
+    editingRole,
+    setEditingRole,
+  ] =
+    useState<AdminRoleReal | null>(
+      null,
     );
+
+  const [roleName, setRoleName] =
+    useState('');
+
+  const [
+    roleDescription,
+    setRoleDescription,
+  ] = useState('');
+
+  const [
+    selectedPermissions,
+    setSelectedPermissions,
+  ] = useState<string[]>([]);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+
+      const [
+        rolesResponse,
+        permissionsResponse,
+      ] = await Promise.all([
+        AdminUsersApi.listRoles(),
+        AdminUsersApi.listPermissions(),
+      ]);
+
+      setRoles(
+        unwrapItems<AdminRoleReal>(
+          rolesResponse,
+        ),
+      );
+
+      setPermissions(
+        unwrapItems<AdminPermissionReal>(
+          permissionsResponse,
+        ),
+      );
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      showToast('Por favor, digite o nome do perfil.');
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const filteredRoles =
+    useMemo(() => {
+      const term =
+        search
+          .trim()
+          .toLowerCase();
+
+      if (!term) {
+        return roles;
+      }
+
+      return roles.filter(
+        (role) =>
+          role.name
+            .toLowerCase()
+            .includes(term) ||
+          String(
+            role.description ||
+              '',
+          )
+            .toLowerCase()
+            .includes(term),
+      );
+    }, [roles, search]);
+
+  const openCreate = () => {
+    setEditingRole(null);
+    setRoleName('');
+    setRoleDescription('');
+    setSelectedPermissions([]);
+    setModalOpen(true);
+  };
+
+  const openEdit = (
+    role: AdminRoleReal,
+  ) => {
+    if (
+      role.name ===
+      'GLOBAL_ADMIN'
+    ) {
+      showToast(
+        'GLOBAL_ADMIN é uma role estrutural crítica e não será editada por esta interface.',
+      );
+
       return;
     }
 
-    if (editingRole) {
-      setRoles(prev =>
-        prev.map(r =>
-          r.id === editingRole.id
-            ? { ...r, name, desc, permissions: selectedPerms }
-            : r
-        )
-      );
-      showToast(`Matriz de permissões do perfil "${name}" atualizada!`);
-    } else {
-      const newRole: RoleItem = {
-        id: `ROL-${Date.now().toString().slice(-4)}`,
-        name,
-        users: 0,
-        desc: desc || 'Perfil personalizado',
-        permissions: selectedPerms
-      };
-      setRoles(prev => [...prev, newRole]);
-      showToast(`Novo perfil "${name}" criado com sucesso!`);
-    }
+    setEditingRole(role);
+    setRoleName(role.name);
 
-    setIsModalOpen(false);
+    setRoleDescription(
+      role.description || '',
+    );
+
+    setSelectedPermissions(
+      rolePermissionSlugs(role),
+    );
+
+    setModalOpen(true);
   };
 
-  const handleDelete = (id: string, roleName: string) => {
-    if (confirm(`Excluir o perfil "${roleName}"?`)) {
-      setRoles(prev => prev.filter(r => r.id !== id));
-      showToast(`Perfil "${roleName}" removido.`);
+  const togglePermission = (
+    slug: string,
+  ) => {
+    setSelectedPermissions(
+      (current) =>
+        current.includes(slug)
+          ? current.filter(
+              (item) =>
+                item !== slug,
+            )
+          : [
+              ...current,
+              slug,
+            ],
+    );
+  };
+
+  const saveRole = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    const normalizedName =
+      roleName
+        .trim()
+        .toUpperCase();
+
+    if (!normalizedName) {
+      showToast(
+        'Informe o nome da role.',
+      );
+      return;
+    }
+
+    if (
+      !selectedPermissions.length
+    ) {
+      showToast(
+        'Selecione pelo menos uma permissão.',
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      if (editingRole) {
+        await AdminUsersApi.updateRole(
+          editingRole.id,
+          {
+            /*
+             * Roles estruturais continuam
+             * com o nome original.
+             */
+            name:
+              PROTECTED_ROLES.has(
+                editingRole.name,
+              )
+                ? undefined
+                : normalizedName,
+
+            description:
+              roleDescription.trim(),
+
+            permissions:
+              selectedPermissions,
+          },
+        );
+
+        showToast(
+          `Role ${editingRole.name} atualizada.`,
+        );
+      } else {
+        await AdminUsersApi.createRole({
+          name:
+            normalizedName,
+
+          description:
+            roleDescription.trim() ||
+            undefined,
+
+          permissions:
+            selectedPermissions,
+        });
+
+        showToast(
+          `Role ${normalizedName} criada.`,
+        );
+      }
+
+      setModalOpen(false);
+      await load();
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRole = async (
+    role: AdminRoleReal,
+  ) => {
+    if (
+      PROTECTED_ROLES.has(
+        role.name,
+      )
+    ) {
+      showToast(
+        'Esta role é estrutural e não pode ser excluída.',
+      );
+      return;
+    }
+
+    const userCount =
+      role._count?.users || 0;
+
+    if (userCount > 0) {
+      showToast(
+        `Esta role ainda está atribuída a ${userCount} usuário(s).`,
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Excluir a role "${role.name}"?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await AdminUsersApi.deleteRole(
+        role.id,
+      );
+
+      showToast(
+        `Role ${role.name} excluída.`,
+      );
+
+      await load();
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
-            <Lock className="w-6 h-6 text-purple-600" />
-            Matriz de Perfis, Funções & Permissões Granulares
+          <h1 className="text-2xl font-black flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-purple-600" />
+            Roles & Permissões
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Configuração de acessos por perfil de liderança nacional e regional.
+            Controle real de acesso
+            administrativo e operacional
+            da plataforma.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Criar Novo Perfil
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void load()
+            }
+            className="px-4 py-2.5 bg-gray-100 rounded-xl text-xs font-bold flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
+
+          <button
+            type="button"
+            onClick={openCreate}
+            className="px-4 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-black flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Nova role
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {roles.map(r => (
-          <div key={r.id} className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 space-y-3">
-            <div className="flex justify-between items-start">
+      <div className="bg-white border rounded-2xl p-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+
+          <input
+            value={search}
+            onChange={(event) =>
+              setSearch(
+                event.target.value,
+              )
+            }
+            placeholder="Buscar role..."
+            className="w-full pl-9 pr-3 py-2 border rounded-xl text-xs"
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="bg-white border rounded-2xl p-12 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-2 gap-5">
+          {filteredRoles.map(
+            (role) => {
+              const structural =
+                PROTECTED_ROLES.has(
+                  role.name,
+                );
+
+              const rolePermissions =
+                rolePermissionSlugs(
+                  role,
+                );
+
+              return (
+                <div
+                  key={role.id}
+                  className="bg-white border rounded-2xl p-5 space-y-4"
+                >
+                  <div className="flex justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {structural && (
+                          <Lock className="w-4 h-4 text-amber-600" />
+                        )}
+
+                        <h3 className="font-black">
+                          {role.name}
+                        </h3>
+                      </div>
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        {role.description ||
+                          'Sem descrição.'}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <strong className="block text-lg">
+                        {role._count
+                          ?.users || 0}
+                      </strong>
+
+                      <span className="text-[9px] text-gray-400">
+                        usuários
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase font-black text-gray-400">
+                      Permissões
+                    </span>
+
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {rolePermissions.length ? (
+                        rolePermissions.map(
+                          (permission) => (
+                            <span
+                              key={
+                                permission
+                              }
+                              className="text-[9px] bg-purple-50 text-purple-700 px-2 py-1 rounded-full font-bold"
+                            >
+                              {
+                                permission
+                              }
+                            </span>
+                          ),
+                        )
+                      ) : (
+                        <span className="text-xs text-gray-400">
+                          Nenhuma permissão.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-3 flex justify-end gap-2">
+                    {role.name !==
+                      'GLOBAL_ADMIN' && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openEdit(role)
+                        }
+                        className="px-3 py-2 bg-purple-50 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        Editar
+                      </button>
+                    )}
+
+                    {!structural && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void deleteRole(
+                            role,
+                          )
+                        }
+                        className="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            },
+          )}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between border-b pb-3">
               <div>
-                <h3 className="font-extrabold text-sm text-gray-900">{r.name}</h3>
-                <p className="text-xs text-gray-500">{r.desc}</p>
+                <h3 className="font-black text-lg">
+                  {editingRole
+                    ? 'Editar role'
+                    : 'Criar role'}
+                </h3>
+
+                <p className="text-[10px] text-gray-500 mt-1">
+                  As permissões escolhidas
+                  terão efeito real no backend.
+                </p>
               </div>
-              <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-2 py-0.5 rounded whitespace-nowrap">
-                {r.users} Usuários Ativos
-              </span>
-            </div>
 
-            <div className="flex flex-wrap gap-1 pt-1">
-              {r.permissions.map((p, idx) => (
-                <span key={idx} className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                  ✓ {p}
-                </span>
-              ))}
-            </div>
-
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">
               <button
-                onClick={() => handleOpenEdit(r)}
-                className="text-purple-600 font-extrabold hover:underline cursor-pointer flex items-center gap-1"
+                type="button"
+                onClick={() =>
+                  setModalOpen(false)
+                }
               >
-                <Edit2 className="w-3.5 h-3.5" /> Editar Matriz de Permissões
-              </button>
-              <button
-                onClick={() => handleDelete(r.id, r.name)}
-                className="text-red-600 font-bold hover:underline cursor-pointer"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Modal Criar / Editar Perfil */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Lock className="w-5 h-5 text-purple-600" />
-                {editingRole ? `Editar Perfil: ${editingRole.name}` : 'Criar Novo Perfil'}
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <form
+              onSubmit={saveRole}
+              className="space-y-5 mt-5"
+            >
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome do Perfil:</label>
+                <label className="block text-xs font-bold mb-1">
+                  Nome
+                </label>
+
                 <input
-                  type="text"
                   required
-                  placeholder="Ex: Auditor Financeiro Regional"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
+                  disabled={
+                    !!editingRole &&
+                    PROTECTED_ROLES.has(
+                      editingRole.name,
+                    )
+                  }
+                  value={roleName}
+                  onChange={(event) =>
+                    setRoleName(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5 text-xs disabled:bg-gray-100"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Descrição das Responsabilidades:</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Responsável por auditorias de saques e boletos."
-                  value={desc}
-                  onChange={e => setDesc(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
+                <label className="block text-xs font-bold mb-1">
+                  Descrição
+                </label>
+
+                <textarea
+                  value={
+                    roleDescription
+                  }
+                  onChange={(event) =>
+                    setRoleDescription(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5 text-xs min-h-[80px]"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-2">Selecione as Permissões do Módulo:</label>
-                <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 max-h-48 overflow-y-auto">
-                  {allAvailablePermissions.map(perm => {
-                    const isChecked = selectedPerms.includes(perm);
-                    return (
-                      <label
-                        key={perm}
-                        onClick={() => togglePermission(perm)}
-                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition font-bold select-none ${
-                          isChecked ? 'bg-purple-100 text-purple-900 border border-purple-300' : 'bg-white text-gray-700 border border-gray-200'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className="rounded text-purple-600 focus:ring-purple-500"
-                        />
-                        {perm}
-                      </label>
-                    );
-                  })}
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-black">
+                    Permissões
+                  </label>
+
+                  <span className="text-[10px] text-gray-500">
+                    {
+                      selectedPermissions.length
+                    }{' '}
+                    selecionadas
+                  </span>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-2 mt-3">
+                  {permissions.map(
+                    (permission) => {
+                      const checked =
+                        selectedPermissions.includes(
+                          permission.slug,
+                        );
+
+                      return (
+                        <label
+                          key={
+                            permission.id
+                          }
+                          className={`border rounded-xl p-3 flex gap-2 cursor-pointer ${
+                            checked
+                              ? 'border-purple-400 bg-purple-50'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              checked
+                            }
+                            onChange={() =>
+                              togglePermission(
+                                permission.slug,
+                              )
+                            }
+                          />
+
+                          <div>
+                            <strong className="block text-[11px]">
+                              {
+                                permission.name
+                              }
+                            </strong>
+
+                            <span className="block text-[9px] text-purple-700 font-mono mt-0.5">
+                              {
+                                permission.slug
+                              }
+                            </span>
+
+                            {permission.description && (
+                              <span className="block text-[9px] text-gray-400 mt-1">
+                                {
+                                  permission.description
+                                }
+                              </span>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    },
+                  )}
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="border-t pt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+                  onClick={() =>
+                    setModalOpen(false)
+                  }
+                  className="px-4 py-2 border rounded-xl text-xs font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
+                  disabled={saving}
+                  className="px-5 py-2 bg-purple-600 text-white rounded-xl text-xs font-black flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" /> Salvar Perfil
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+
+                  Salvar
                 </button>
               </div>
             </form>

@@ -1,321 +1,1129 @@
-import React, { useState } from 'react';
-import { Users, Search, Filter, Shield, Ban, Lock, Unlock, Key, RefreshCw, Eye, AlertOctagon, Plus, X, Check, CheckCircle2 } from 'lucide-react';
-import { mockAdminUsersList, AdminUserRecord } from '../../data/mockAdminUsers';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  Ban,
+  CheckCircle2,
+  Eye,
+  KeyRound,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserCog,
+  Users,
+  X,
+} from 'lucide-react';
+
+import {
+  AdminRoleReal,
+  AdminUserReal,
+  AdminUsersApi,
+} from '../../api/clients/AdminUsersApi';
+
+import { CountriesApi } from '../../api/clients/CountriesApi';
 
 interface AdminUsersManagerProps {
   showToast: (msg: string) => void;
 }
 
-export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({ showToast }) => {
-  const [users, setUsers] = useState<AdminUserRecord[]>(mockAdminUsersList);
-  const [activeTab, setActiveTab] = useState<'all' | 'buyers' | 'sellers' | 'internal' | 'blocked' | 'suspended' | 'pending_kyc'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+interface CountryOption {
+  id?: string;
+  code: string;
+  name: string;
+  phonePrefix?: string;
+  phoneCode?: string;
+}
 
-  // Modals state
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [viewUser, setViewUser] = useState<AdminUserRecord | null>(null);
-  const [resetPasswordUser, setResetPasswordUser] = useState<AdminUserRecord | null>(null);
-  const [newPasswordInput, setNewPasswordInput] = useState('');
+const getErrorMessage = (error: any) =>
+  error?.response?.data?.error?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
 
-  // Form for New User
-  const [formName, setFormName] = useState('');
-  const [formEmail, setFormEmail] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formCountry, setFormCountry] = useState('GW');
-  const [formRole, setFormRole] = useState<'buyer' | 'seller' | 'admin' | 'country_rep' | 'supervisor'>('buyer');
+const unwrapItems = <T,>(
+  response: any,
+): T[] => {
+  const data = response?.data;
 
-  const filtered = users.filter(u => {
-    if (activeTab === 'buyers' && u.role !== 'buyer') return false;
-    if (activeTab === 'sellers' && u.role !== 'seller') return false;
-    if (activeTab === 'blocked' && u.status !== 'blocked') return false;
-    if (activeTab === 'suspended' && u.status !== 'suspended') return false;
-    if (activeTab === 'pending_kyc' && u.status !== 'pending_kyc') return false;
-    if (searchTerm) {
-      const match = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    u.phone.includes(searchTerm);
-      if (!match) return false;
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+};
+
+const statusLabel = (status: string) => {
+  switch (status) {
+    case 'active':
+      return 'Ativo';
+
+    case 'blocked':
+      return 'Bloqueado';
+
+    case 'suspended':
+      return 'Suspenso';
+
+    case 'inactive':
+      return 'Inativo';
+
+    default:
+      return status;
+  }
+};
+
+const statusClasses = (status: string) => {
+  switch (status) {
+    case 'active':
+      return 'bg-emerald-100 text-emerald-700';
+
+    case 'blocked':
+      return 'bg-red-100 text-red-700';
+
+    case 'suspended':
+      return 'bg-amber-100 text-amber-700';
+
+    default:
+      return 'bg-gray-100 text-gray-600';
+  }
+};
+
+export const AdminUsersManager:
+React.FC<AdminUsersManagerProps> = ({
+  showToast,
+}) => {
+  const [users, setUsers] =
+    useState<AdminUserReal[]>([]);
+
+  const [roles, setRoles] =
+    useState<AdminRoleReal[]>([]);
+
+  const [countries, setCountries] =
+    useState<CountryOption[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [search, setSearch] =
+    useState('');
+
+  const [statusFilter, setStatusFilter] =
+    useState('');
+
+  const [roleFilter, setRoleFilter] =
+    useState('');
+
+  const [
+    createModalOpen,
+    setCreateModalOpen,
+  ] = useState(false);
+
+  const [
+    selectedUser,
+    setSelectedUser,
+  ] = useState<AdminUserReal | null>(
+    null,
+  );
+
+  const [
+    roleUser,
+    setRoleUser,
+  ] = useState<AdminUserReal | null>(
+    null,
+  );
+
+  const [
+    selectedRoles,
+    setSelectedRoles,
+  ] = useState<string[]>([]);
+
+  const [firstName, setFirstName] =
+    useState('');
+
+  const [lastName, setLastName] =
+    useState('');
+
+  const [email, setEmail] =
+    useState('');
+
+  const [phone, setPhone] =
+    useState('');
+
+  const [phoneCode, setPhoneCode] =
+    useState('+245');
+
+  const [countryCode, setCountryCode] =
+    useState('GW');
+
+  const [createRoles, setCreateRoles] =
+    useState<string[]>(['BUYER']);
+
+  const loadReferenceData = async () => {
+    try {
+      const [
+        rolesResponse,
+        countriesResponse,
+      ] = await Promise.all([
+        AdminUsersApi.listRoles(),
+        CountriesApi.list(),
+      ]);
+
+      setRoles(
+        unwrapItems<AdminRoleReal>(
+          rolesResponse,
+        ),
+      );
+
+      const countryList =
+        unwrapItems<CountryOption>(
+          countriesResponse,
+        );
+
+      setCountries(countryList);
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
     }
-    return true;
-  });
+  };
 
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim() || !formEmail.trim()) {
-      showToast('Por favor, informe o nome e o email do usuário.');
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+
+      const response =
+        await AdminUsersApi.listUsers({
+          page: 1,
+          limit: 100,
+
+          search:
+            search.trim() ||
+            undefined,
+
+          status:
+            statusFilter ||
+            undefined,
+
+          role:
+            roleFilter ||
+            undefined,
+        });
+
+      setUsers(
+        unwrapItems<AdminUserReal>(
+          response,
+        ),
+      );
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void Promise.all([
+      loadReferenceData(),
+      loadUsers(),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [
+    statusFilter,
+    roleFilter,
+  ]);
+
+  const filteredUsers = useMemo(() => {
+    if (!search.trim()) {
+      return users;
+    }
+
+    const term =
+      search
+        .trim()
+        .toLowerCase();
+
+    return users.filter((user) =>
+      [
+        user.name,
+        user.email,
+        user.phone,
+        user.roles?.join(' '),
+        user.country?.name,
+      ].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(term),
+      ),
+    );
+  }, [users, search]);
+
+  const resetCreateForm = () => {
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setPhone('');
+    setPhoneCode('+245');
+    setCountryCode('GW');
+    setCreateRoles(['BUYER']);
+  };
+
+  const toggleCreateRole = (
+    roleName: string,
+  ) => {
+    setCreateRoles((current) => {
+      if (
+        current.includes(roleName)
+      ) {
+        if (current.length === 1) {
+          return current;
+        }
+
+        return current.filter(
+          (role) =>
+            role !== roleName,
+        );
+      }
+
+      return [
+        ...current,
+        roleName,
+      ];
+    });
+  };
+
+  const handleCountryChange = (
+    nextCode: string,
+  ) => {
+    setCountryCode(nextCode);
+
+    const country =
+      countries.find(
+        (item) =>
+          item.code === nextCode,
+      );
+
+    const prefix =
+      country?.phonePrefix ||
+      country?.phoneCode;
+
+    if (prefix) {
+      setPhoneCode(prefix);
+    }
+  };
+
+  const handleCreateUser = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !email.trim() ||
+      !phone.trim()
+    ) {
+      showToast(
+        'Preencha os dados obrigatórios.',
+      );
       return;
     }
 
-    const newUser: AdminUserRecord = {
-      id: `USR-${Date.now().toString().slice(-4)}`,
-      name: formName,
-      email: formEmail,
-      phone: formPhone || '+245 950000000',
-      role: formRole,
-      roleLabel: formRole === 'buyer' ? 'Comprador' : formRole === 'seller' ? 'Vendedor' : formRole === 'admin' ? 'Administrador' : 'Equipe',
-      country: formCountry,
-      status: 'active',
-      riskScore: 'baixo',
-      ordersCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-      lastLogin: 'Agora mesmo',
-      purchasesCount: 0
-    };
+    if (!createRoles.length) {
+      showToast(
+        'Selecione pelo menos uma role.',
+      );
+      return;
+    }
 
-    setUsers(prev => [newUser, ...prev]);
-    showToast(`Usuário "${formName}" cadastrado com sucesso!`);
-    setIsCreateModalOpen(false);
+    try {
+      setSaving(true);
 
-    // Reset form
-    setFormName('');
-    setFormEmail('');
-    setFormPhone('');
-    setFormCountry('GW');
-    setFormRole('buyer');
+      const response =
+        await AdminUsersApi.createUser({
+          firstName:
+            firstName.trim(),
+
+          lastName:
+            lastName.trim(),
+
+          email:
+            email
+              .trim()
+              .toLowerCase(),
+
+          phone:
+            phone.trim(),
+
+          phoneCode:
+            phoneCode.trim(),
+
+          countryCode,
+
+          roles: createRoles,
+        });
+
+      const createdUser =
+        response?.data as
+          | AdminUserReal
+          | undefined;
+
+      /*
+       * A conta não recebe uma senha conhecida
+       * pelo administrador.
+       *
+       * Após criar, enviamos o fluxo seguro
+       * de definição de senha por e-mail.
+       */
+      if (createdUser?.id) {
+        try {
+          await AdminUsersApi.sendPasswordReset(
+            createdUser.id,
+          );
+
+          showToast(
+            'Usuário criado e instruções para definir a senha enviadas por e-mail.',
+          );
+        } catch {
+          showToast(
+            'Usuário criado, mas não foi possível enviar o e-mail de definição de senha. Você pode reenviá-lo pela lista.',
+          );
+        }
+      } else {
+        showToast(
+          'Usuário criado com sucesso.',
+        );
+      }
+
+      setCreateModalOpen(false);
+      resetCreateForm();
+
+      await loadUsers();
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleToggleBlock = (u: AdminUserRecord) => {
-    const nextStatus = u.status === 'blocked' ? 'active' : 'blocked';
-    setUsers(prev =>
-      prev.map(item => item.id === u.id ? { ...item, status: nextStatus } : item)
+  const changeStatus = async (
+    user: AdminUserReal,
+    status:
+      | 'active'
+      | 'blocked'
+      | 'suspended'
+      | 'inactive',
+  ) => {
+    let reason:
+      | string
+      | undefined;
+
+    if (
+      status === 'blocked' ||
+      status === 'suspended'
+    ) {
+      const typedReason =
+        window.prompt(
+          status === 'blocked'
+            ? 'Informe o motivo do bloqueio:'
+            : 'Informe o motivo da suspensão:',
+        );
+
+      if (
+        typedReason === null
+      ) {
+        return;
+      }
+
+      reason =
+        typedReason.trim() ||
+        undefined;
+    }
+
+    try {
+      await AdminUsersApi.updateStatus(
+        user.id,
+        {
+          status,
+          reason,
+        },
+      );
+
+      showToast(
+        `${user.name} agora está ${statusLabel(
+          status,
+        ).toLowerCase()}.`,
+      );
+
+      await loadUsers();
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    }
+  };
+
+  const sendPasswordReset = async (
+    user: AdminUserReal,
+  ) => {
+    const confirmed =
+      window.confirm(
+        `Enviar instruções de redefinição de senha para ${user.email}?`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await AdminUsersApi.sendPasswordReset(
+        user.id,
+      );
+
+      showToast(
+        `Instruções de redefinição enviadas para ${user.email}.`,
+      );
+    } catch (error: any) {
+      showToast(
+        getErrorMessage(error),
+      );
+    }
+  };
+
+  const openRolesModal = (
+    user: AdminUserReal,
+  ) => {
+    setRoleUser(user);
+
+    setSelectedRoles(
+      user.roles || [],
     );
-    showToast(`Usuário ${u.name} alterado para status ${nextStatus.toUpperCase()}.`);
   };
 
-  const handleConfirmResetPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!resetPasswordUser || !newPasswordInput.trim()) return;
+  const toggleUserRole = (
+    roleName: string,
+  ) => {
+    setSelectedRoles(
+      (current) => {
+        if (
+          current.includes(roleName)
+        ) {
+          if (
+            current.length === 1
+          ) {
+            return current;
+          }
 
-    showToast(`Senha do usuário ${resetPasswordUser.name} redefinida com sucesso!`);
-    setResetPasswordUser(null);
-    setNewPasswordInput('');
+          return current.filter(
+            (role) =>
+              role !==
+              roleName,
+          );
+        }
+
+        return [
+          ...current,
+          roleName,
+        ];
+      },
+    );
   };
+
+  const saveUserRoles =
+    async () => {
+      if (!roleUser) {
+        return;
+      }
+
+      if (!selectedRoles.length) {
+        showToast(
+          'O usuário precisa ter pelo menos uma role.',
+        );
+        return;
+      }
+
+      try {
+        setSaving(true);
+
+        await AdminUsersApi.updateRoles(
+          roleUser.id,
+          selectedRoles,
+        );
+
+        showToast(
+          `Perfis de acesso de ${roleUser.name} atualizados.`,
+        );
+
+        setRoleUser(null);
+
+        await loadUsers();
+      } catch (error: any) {
+        showToast(
+          getErrorMessage(error),
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-purple-600" />
-            Gestão Global de Usuários
+            Usuários da Plataforma
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Administração de compradores, vendedores e equipe interna com controle de acesso e auditoria de risco.
+            Contas, status de acesso,
+            perfis administrativos e
+            segurança.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void loadUsers()
+            }
+            className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              resetCreateForm();
+              setCreateModalOpen(
+                true,
+              );
+            }}
+            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Novo usuário
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col lg:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+
+          <input
+            value={search}
+            onChange={(event) =>
+              setSearch(
+                event.target.value,
+              )
+            }
+            onKeyDown={(event) => {
+              if (
+                event.key ===
+                'Enter'
+              ) {
+                void loadUsers();
+              }
+            }}
+            placeholder="Nome, e-mail, telefone..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-xs"
+          />
+        </div>
+
+        <select
+          value={roleFilter}
+          onChange={(event) =>
+            setRoleFilter(
+              event.target.value,
+            )
+          }
+          className="border rounded-xl px-3 py-2 text-xs font-bold"
         >
-          <Plus className="w-4 h-4" /> Cadastrar Novo Usuário
-        </button>
+          <option value="">
+            Todas as roles
+          </option>
+
+          {roles.map((role) => (
+            <option
+              key={role.id}
+              value={role.name}
+            >
+              {role.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(event) =>
+            setStatusFilter(
+              event.target.value,
+            )
+          }
+          className="border rounded-xl px-3 py-2 text-xs font-bold"
+        >
+          <option value="">
+            Todos os status
+          </option>
+
+          <option value="active">
+            Ativos
+          </option>
+
+          <option value="blocked">
+            Bloqueados
+          </option>
+
+          <option value="suspended">
+            Suspensos
+          </option>
+
+          <option value="inactive">
+            Inativos
+          </option>
+        </select>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
-        {/* Tabs & Search */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
-            {[
-              { id: 'all', label: 'Todos' },
-              { id: 'buyers', label: 'Compradores' },
-              { id: 'sellers', label: 'Vendedores' },
-              { id: 'blocked', label: 'Bloqueados' },
-              { id: 'suspended', label: 'Suspensos' },
-              { id: 'pending_kyc', label: 'Pendentes KYC' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition cursor-pointer ${
-                  activeTab === tab.id ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        {loading ? (
+          <div className="p-12 flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
           </div>
-
-          <div className="relative w-full md:w-64">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Buscar por nome, email, tel..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
-            />
+        ) : !filteredUsers.length ? (
+          <div className="p-12 text-center text-sm text-gray-500">
+            Nenhum usuário encontrado.
           </div>
-        </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-gray-50 border-b">
+                <tr className="text-[10px] uppercase font-black text-gray-500">
+                  <th className="p-3">
+                    Usuário
+                  </th>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase font-black text-[10px]">
-                <th className="p-3">Usuário / Email</th>
-                <th className="p-3">País</th>
-                <th className="p-3">Função</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Risco</th>
-                <th className="p-3">Pedidos/Vendas</th>
-                <th className="p-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map(u => (
-                <tr key={u.id} className="hover:bg-gray-50/50">
-                  <td className="p-3">
-                    <div className="font-extrabold text-gray-900">{u.name}</div>
-                    <div className="text-[10px] text-gray-400">{u.email} • {u.phone}</div>
-                  </td>
-                  <td className="p-3 font-bold text-gray-800">
-                    {u.country === 'GW' ? '🇬🇼 GW' : u.country === 'BR' ? '🇧🇷 BR' : u.country === 'PT' ? '🇵🇹 PT' : '🇦🇴 AO'}
-                  </td>
-                  <td className="p-3 font-bold text-purple-700">{u.roleLabel}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      u.status === 'active' ? 'bg-emerald-100 text-emerald-800' :
-                      u.status === 'blocked' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {u.status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className={`font-bold ${
-                      u.riskScore === 'critico' ? 'text-red-600' :
-                      u.riskScore === 'alto' ? 'text-amber-600' : 'text-emerald-600'
-                    }`}>
-                      {u.riskScore.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-3 font-bold text-gray-700">{u.ordersCount} refs</td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setViewUser(u)}
-                        className="p-1.5 hover:bg-purple-50 text-purple-600 rounded-lg cursor-pointer"
-                        title="Visualizar Detalhes"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => { setResetPasswordUser(u); setNewPasswordInput(''); }}
-                        className="p-1.5 hover:bg-gray-100 text-gray-600 rounded-lg cursor-pointer"
-                        title="Redefinir Senha"
-                      >
-                        <Key className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleToggleBlock(u)}
-                        className={`p-1.5 rounded-lg cursor-pointer ${
-                          u.status === 'blocked' ? 'hover:bg-emerald-50 text-emerald-600' : 'hover:bg-red-50 text-red-600'
-                        }`}
-                        title={u.status === 'blocked' ? 'Desbloquear' : 'Bloquear'}
-                      >
-                        <Ban className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+                  <th className="p-3">
+                    País
+                  </th>
+
+                  <th className="p-3">
+                    Roles
+                  </th>
+
+                  <th className="p-3">
+                    Status
+                  </th>
+
+                  <th className="p-3">
+                    Verificação
+                  </th>
+
+                  <th className="p-3 text-right">
+                    Ações
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+
+              <tbody className="divide-y">
+                {filteredUsers.map(
+                  (user) => (
+                    <tr
+                      key={user.id}
+                      className="hover:bg-gray-50/60"
+                    >
+                      <td className="p-3">
+                        <strong className="block text-gray-900">
+                          {user.name}
+                        </strong>
+
+                        <span className="block text-[10px] text-gray-500">
+                          {user.email}
+                        </span>
+
+                        <span className="block text-[10px] text-gray-400">
+                          {user.phoneCode}{' '}
+                          {user.phone}
+                        </span>
+                      </td>
+
+                      <td className="p-3 font-bold">
+                        {user.country?.name ||
+                          user.country?.code ||
+                          '—'}
+                      </td>
+
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(user.roles || []).map(
+                            (role) => (
+                              <span
+                                key={role}
+                                className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-[9px] font-black"
+                              >
+                                {role}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <span
+                          className={`px-2 py-1 rounded-full text-[9px] font-black ${statusClasses(
+                            user.status,
+                          )}`}
+                        >
+                          {statusLabel(
+                            user.status,
+                          ).toUpperCase()}
+                        </span>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="space-y-1">
+                          <div
+                            className={
+                              user.isEmailVerified
+                                ? 'text-emerald-700'
+                                : 'text-gray-400'
+                            }
+                          >
+                            E-mail:{' '}
+                            {user.isEmailVerified
+                              ? 'verificado'
+                              : 'pendente'}
+                          </div>
+
+                          <div
+                            className={
+                              user.isPhoneVerified
+                                ? 'text-emerald-700'
+                                : 'text-gray-400'
+                            }
+                          >
+                            Telefone:{' '}
+                            {user.isPhoneVerified
+                              ? 'verificado'
+                              : 'pendente'}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="flex justify-end gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            title="Detalhes"
+                            onClick={() =>
+                              setSelectedUser(
+                                user,
+                              )
+                            }
+                            className="p-2 text-purple-700 hover:bg-purple-50 rounded-lg"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            title="Roles"
+                            onClick={() =>
+                              openRolesModal(
+                                user,
+                              )
+                            }
+                            className="p-2 text-blue-700 hover:bg-blue-50 rounded-lg"
+                          >
+                            <UserCog className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            title="Redefinição de senha"
+                            onClick={() =>
+                              void sendPasswordReset(
+                                user,
+                              )
+                            }
+                            className="p-2 text-amber-700 hover:bg-amber-50 rounded-lg"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
+
+                          {user.status !==
+                          'active' ? (
+                            <button
+                              type="button"
+                              title="Reativar"
+                              onClick={() =>
+                                void changeStatus(
+                                  user,
+                                  'active',
+                                )
+                              }
+                              className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                title="Suspender"
+                                onClick={() =>
+                                  void changeStatus(
+                                    user,
+                                    'suspended',
+                                  )
+                                }
+                                className="p-2 text-amber-700 hover:bg-amber-50 rounded-lg"
+                              >
+                                <ShieldCheck className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Bloquear"
+                                onClick={() =>
+                                  void changeStatus(
+                                    user,
+                                    'blocked',
+                                  )
+                                }
+                                className="p-2 text-red-700 hover:bg-red-50 rounded-lg"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Modal Novo Usuário */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-purple-600" /> Cadastrar Novo Usuário
-              </h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+      {createModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-black text-lg">
+                  Criar usuário
+                </h3>
+
+                <p className="text-[10px] text-gray-500 mt-1">
+                  O usuário receberá por
+                  e-mail o procedimento
+                  seguro para definir sua
+                  senha.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCreateModalOpen(
+                    false,
+                  )
+                }
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome Completo:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Domingos Caetano"
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
+            <form
+              onSubmit={
+                handleCreateUser
+              }
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5 text-xs"
+            >
+              <Field
+                label="Nome"
+                value={firstName}
+                onChange={
+                  setFirstName
+                }
+                required
+              />
+
+              <Field
+                label="Sobrenome"
+                value={lastName}
+                onChange={
+                  setLastName
+                }
+                required
+              />
+
+              <Field
+                label="E-mail"
+                value={email}
+                onChange={setEmail}
+                type="email"
+                required
+              />
+
+              <Field
+                label="Telefone"
+                value={phone}
+                onChange={setPhone}
+                required
+              />
+
+              <Field
+                label="Código telefônico"
+                value={phoneCode}
+                onChange={
+                  setPhoneCode
+                }
+                required
+              />
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">E-mail de Acesso:</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="Ex: domingos@gmail.com"
-                  value={formEmail}
-                  onChange={e => setFormEmail(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
+                <label className="block font-bold mb-1">
+                  País
+                </label>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Telefone / WhatsApp:</label>
-                  <input
-                    type="text"
-                    placeholder="+245 950000000"
-                    value={formPhone}
-                    onChange={e => setFormPhone(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">País:</label>
-                  <select
-                    value={formCountry}
-                    onChange={e => setFormCountry(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  >
-                    <option value="GW">🇬🇼 Guiné-Bissau</option>
-                    <option value="BR">🇧🇷 Brasil</option>
-                    <option value="PT">🇵🇹 Portugal</option>
-                    <option value="AO">🇦🇴 Angola</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Função / Perfil:</label>
                 <select
-                  value={formRole}
-                  onChange={e => setFormRole(e.target.value as any)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
+                  value={countryCode}
+                  onChange={(event) =>
+                    handleCountryChange(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5"
                 >
-                  <option value="buyer">Comprador</option>
-                  <option value="seller">Vendedor</option>
-                  <option value="admin">Administrador Global</option>
-                  <option value="country_rep">Representante Nacional</option>
-                  <option value="supervisor">Supervisor de Operações</option>
+                  {countries.length ? (
+                    countries.map(
+                      (country) => (
+                        <option
+                          key={
+                            country.code
+                          }
+                          value={
+                            country.code
+                          }
+                        >
+                          {
+                            country.name
+                          }{' '}
+                          (
+                          {
+                            country.code
+                          }
+                          )
+                        </option>
+                      ),
+                    )
+                  ) : (
+                    <option value="GW">
+                      Guiné-Bissau
+                    </option>
+                  )}
                 </select>
               </div>
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="md:col-span-2">
+                <label className="block font-bold mb-2">
+                  Perfis de acesso
+                </label>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {roles.map(
+                    (role) => {
+                      const checked =
+                        createRoles.includes(
+                          role.name,
+                        );
+
+                      return (
+                        <label
+                          key={
+                            role.id
+                          }
+                          className={`border rounded-xl p-3 flex items-center gap-2 cursor-pointer ${
+                            checked
+                              ? 'border-purple-400 bg-purple-50'
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              checked
+                            }
+                            onChange={() =>
+                              toggleCreateRole(
+                                role.name,
+                              )
+                            }
+                          />
+
+                          <span className="font-bold">
+                            {
+                              role.name
+                            }
+                          </span>
+                        </label>
+                      );
+                    },
+                  )}
+                </div>
+              </div>
+
+              <div className="md:col-span-2 border-t pt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+                  onClick={() =>
+                    setCreateModalOpen(
+                      false,
+                    )
+                  }
+                  className="px-4 py-2 border rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
+                  disabled={saving}
+                  className="px-5 py-2 bg-purple-600 text-white rounded-xl font-black disabled:opacity-50 flex items-center gap-2"
                 >
-                  <Check className="w-4 h-4" /> Cadastrar Usuário
+                  {saving && (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  )}
+
+                  Criar usuário
                 </button>
               </div>
             </form>
@@ -323,102 +1131,233 @@ export const AdminUsersManager: React.FC<AdminUsersManagerProps> = ({ showToast 
         </div>
       )}
 
-      {/* Modal View Details */}
-      {viewUser && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Eye className="w-5 h-5 text-purple-600" /> Detalhes do Usuário #{viewUser.id}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between border-b pb-3">
+              <h3 className="font-black">
+                Detalhes do usuário
               </h3>
-              <button onClick={() => setViewUser(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="bg-purple-50 p-4 rounded-xl space-y-1">
-                <p className="font-extrabold text-sm text-purple-900">{viewUser.name}</p>
-                <p className="text-purple-700 font-bold">{viewUser.email} • {viewUser.phone}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-gray-700">
-                <div className="p-2.5 bg-gray-50 rounded-xl">
-                  <span className="text-gray-400 text-[10px] block font-bold">Função</span>
-                  <span className="font-extrabold text-gray-900">{viewUser.roleLabel}</span>
-                </div>
-                <div className="p-2.5 bg-gray-50 rounded-xl">
-                  <span className="text-gray-400 text-[10px] block font-bold">País</span>
-                  <span className="font-extrabold text-gray-900">{viewUser.country}</span>
-                </div>
-                <div className="p-2.5 bg-gray-50 rounded-xl">
-                  <span className="text-gray-400 text-[10px] block font-bold">Status da Conta</span>
-                  <span className="font-extrabold text-emerald-700 uppercase">{viewUser.status}</span>
-                </div>
-                <div className="p-2.5 bg-gray-50 rounded-xl">
-                  <span className="text-gray-400 text-[10px] block font-bold">Risco Antifraude</span>
-                  <span className="font-extrabold text-purple-700 uppercase">{viewUser.riskScore}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-3 border-t border-gray-100">
               <button
-                onClick={() => setViewUser(null)}
-                className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl"
+                type="button"
+                onClick={() =>
+                  setSelectedUser(
+                    null,
+                  )
+                }
               >
-                Fechar
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="mt-4 text-xs space-y-3">
+              <Info
+                label="Nome"
+                value={
+                  selectedUser.name
+                }
+              />
+
+              <Info
+                label="E-mail"
+                value={
+                  selectedUser.email
+                }
+              />
+
+              <Info
+                label="Telefone"
+                value={`${selectedUser.phoneCode} ${selectedUser.phone}`}
+              />
+
+              <Info
+                label="País"
+                value={
+                  selectedUser
+                    .country?.name ||
+                  '—'
+                }
+              />
+
+              <Info
+                label="Status"
+                value={statusLabel(
+                  selectedUser.status,
+                )}
+              />
+
+              <Info
+                label="Roles"
+                value={
+                  selectedUser.roles?.join(
+                    ', ',
+                  ) || '—'
+                }
+              />
+
+              <Info
+                label="Criado em"
+                value={
+                  selectedUser.createdAt
+                    ? new Date(
+                        selectedUser.createdAt,
+                      ).toLocaleString(
+                        'pt-BR',
+                      )
+                    : '—'
+                }
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Redefinir Senha */}
-      {resetPasswordUser && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Key className="w-5 h-5 text-purple-600" /> Redefinir Senha de {resetPasswordUser.name}
-              </h3>
-              <button onClick={() => setResetPasswordUser(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+      {roleUser && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between border-b pb-3">
+              <div>
+                <h3 className="font-black">
+                  Perfis de acesso
+                </h3>
+
+                <p className="text-[10px] text-gray-500">
+                  {roleUser.name}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setRoleUser(null)
+                }
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleConfirmResetPassword} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Nova Senha Provisória:</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Digite a nova senha..."
-                  value={newPasswordInput}
-                  onChange={e => setNewPasswordInput(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
+            <div className="grid sm:grid-cols-2 gap-2 mt-4">
+              {roles.map((role) => {
+                const checked =
+                  selectedRoles.includes(
+                    role.name,
+                  );
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResetPasswordUser(null)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md"
-                >
-                  Confirmar Redefinição
-                </button>
-              </div>
-            </form>
+                return (
+                  <label
+                    key={role.id}
+                    className={`p-3 border rounded-xl flex gap-2 items-start cursor-pointer ${
+                      checked
+                        ? 'border-purple-400 bg-purple-50'
+                        : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        toggleUserRole(
+                          role.name,
+                        )
+                      }
+                    />
+
+                    <div>
+                      <strong className="block text-xs">
+                        {role.name}
+                      </strong>
+
+                      {role.description && (
+                        <span className="text-[9px] text-gray-500">
+                          {
+                            role.description
+                          }
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="border-t mt-5 pt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setRoleUser(null)
+                }
+                className="px-4 py-2 border rounded-xl text-xs font-bold"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() =>
+                  void saveUserRoles()
+                }
+                className="px-5 py-2 bg-purple-600 text-white rounded-xl text-xs font-black disabled:opacity-50"
+              >
+                Salvar perfis
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+const Field: React.FC<{
+  label: string;
+  value: string;
+  onChange: (
+    value: string,
+  ) => void;
+  type?: string;
+  required?: boolean;
+}> = ({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  required = false,
+}) => (
+  <div>
+    <label className="block font-bold mb-1">
+      {label}
+    </label>
+
+    <input
+      type={type}
+      required={required}
+      value={value}
+      onChange={(event) =>
+        onChange(
+          event.target.value,
+        )
+      }
+      className="w-full border rounded-xl p-2.5"
+    />
+  </div>
+);
+
+const Info: React.FC<{
+  label: string;
+  value: React.ReactNode;
+}> = ({
+  label,
+  value,
+}) => (
+  <div className="flex justify-between gap-4 border-b pb-2">
+    <span className="text-gray-500">
+      {label}
+    </span>
+
+    <strong className="text-right">
+      {value}
+    </strong>
+  </div>
+);
