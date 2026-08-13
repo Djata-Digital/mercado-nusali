@@ -37,6 +37,44 @@ export class PayoutsController {
     };
   }
 
+  @Get('admin/all')
+  @Permissions('payout:process:admin')
+  @ApiOperation({
+    summary:
+      'Listar payouts globalmente para administração financeira',
+  })
+  async listAdminPayouts(
+    @Query('status')
+    status?: string,
+
+    @Query('sellerId')
+    sellerId?: string,
+
+    @Query('limit')
+    limit?: string,
+  ) {
+    return {
+      success: true,
+
+      data:
+        await this.payoutsService.listAdminPayouts(
+          {
+            status:
+              status ||
+              undefined,
+
+            sellerId:
+              sellerId ||
+              undefined,
+
+            limit: limit
+              ? Number(limit)
+              : undefined,
+          },
+        ),
+    };
+  }
+
   @Post('request')
   @Permissions('payout:request:manage')
   async requestPayout(@Req() req: any, @Body() dto: RequestPayoutDto) {

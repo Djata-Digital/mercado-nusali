@@ -24,6 +24,32 @@ export class SettlementsService {
     });
   }
 
+  async listBatches(limit = 100) {
+    const take = Math.min(
+      Math.max(
+        Number(limit) || 100,
+        1,
+      ),
+      200,
+    );
+
+    return this.prisma.settlementBatch.findMany({
+      take,
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      include: {
+        _count: {
+          select: {
+            settlements: true,
+          },
+        },
+      },
+    });
+  }
+
   async getBatch(id: string) {
     const batch = await this.prisma.settlementBatch.findUnique({
       where: { id },

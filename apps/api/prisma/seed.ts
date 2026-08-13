@@ -1007,6 +1007,79 @@ async function main() {
     });
   }
 
+    // ============================================================
+    // ADMIN FINANCE PERMISSIONS
+    // ============================================================
+
+    const financeAdminPermissions = [
+      {
+        slug: 'payout:process:admin',
+        name: 'Processar payouts administrativamente',
+        description:
+          'Permite processar, reconciliar e administrar payouts, settlements e reconciliação financeira.',
+      },
+      {
+        slug: 'refund:admin:read',
+        name: 'Consultar refunds administrativamente',
+        description:
+          'Permite consultar operações, métricas, alertas e histórico de refunds.',
+      },
+      {
+        slug: 'refund:admin:operate',
+        name: 'Operar refunds administrativamente',
+        description:
+          'Permite executar reconciliações administrativas de refunds.',
+      },
+      {
+        slug: 'refund:admin:report',
+        name: 'Relatórios administrativos de refunds',
+        description:
+          'Permite acessar relatórios financeiros de refunds.',
+      },
+    ];
+
+    const globalAdminRole =
+      await prisma.role.findUnique({
+        where: {
+          name: 'GLOBAL_ADMIN',
+        },
+      });
+
+    if (!globalAdminRole) {
+      throw new Error(
+        'Role GLOBAL_ADMIN não encontrada durante o seed.',
+      );
+    }
+
+    for (const permissionData of financeAdminPermissions) {
+      const permission =
+        await prisma.permission.upsert({
+          where: {
+            slug: permissionData.slug,
+          },
+          update: {
+            name: permissionData.name,
+            description:
+              permissionData.description,
+          },
+          create: permissionData,
+        });
+
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: globalAdminRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: globalAdminRole.id,
+          permissionId: permission.id,
+        },
+      });
+    }
+
   console.log('Seed completed successfully!');
 }
 

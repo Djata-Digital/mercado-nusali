@@ -53,6 +53,18 @@ export class SettlementsController {
     });
   }
 
+  @Get('batches')
+  listBatches(
+    @Query('limit')
+    limit?: string,
+  ) {
+    return this.settlements.listBatches(
+      limit
+        ? Number(limit)
+        : 100,
+    );
+  }
+
   @Get('batches/:id')
   getBatch(@Param('id') id: string) {
     return this.settlements.getBatch(id);

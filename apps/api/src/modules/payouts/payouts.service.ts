@@ -281,6 +281,68 @@ export class PayoutsService {
     });
   }
 
+  async listAdminPayouts(query?: {
+    status?: string;
+    sellerId?: string;
+    limit?: number;
+  }) {
+    const limit = Math.min(
+      Math.max(
+        Number(query?.limit) || 100,
+        1,
+      ),
+      200,
+    );
+
+    const where: any = {};
+
+    if (query?.status) {
+      where.status = query.status;
+    }
+
+    if (query?.sellerId) {
+      where.sellerId =
+        query.sellerId;
+    }
+
+    return this.prisma.payout.findMany({
+      where,
+
+      take: limit,
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      include: {
+        currency: true,
+
+        seller: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+
+            stores: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+  }
+
   async listSellerPayouts(userId: string) {
     const seller = await this.prisma.sellerProfile.findUnique({
       where: { userId },
