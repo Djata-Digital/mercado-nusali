@@ -382,9 +382,13 @@ export class SellerProfilesService {
       if (!hasIdentity || !hasSelfie || !hasAddress) {
         throw new BadRequestException('Aprovação KYC recusada: Vendedor INDIVIDUAL requer documento de identidade/passaporte, selfie e comprovante de endereço aprovados.');
       }
-    } else if (sellerType === SellerType.COMPANY || sellerType === SellerType.SOLE_PROPRIETOR) {
+    } else if (
+      sellerType === SellerType.COMPANY ||
+      sellerType === SellerType.SOLE_PROPRIETOR ||
+      sellerType === SellerType.INTERNATIONAL
+    ) {
       if (!hasIdentity || !hasSelfie || !hasAddress || !hasBusinessReg || !hasTaxDoc) {
-        throw new BadRequestException('Aprovação KYC recusada: Empresa/Empresário requer documento do responsável, selfie, comprovante de endereço, registro comercial e documento fiscal aprovados.');
+        throw new BadRequestException('Aprovação KYC recusada: Empresa, Empresário ou Vendedor Internacional requer documento do responsável, selfie, comprovante de endereço, registro comercial e documento fiscal aprovados.');
       }
     } else if (sellerType === SellerType.OFFICIAL_BRAND) {
       const hasBrandProof = docTypes.has('TRADEMARK_REGISTRATION') || docTypes.has('BRAND_AUTHORIZATION');

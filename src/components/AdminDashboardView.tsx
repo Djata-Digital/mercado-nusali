@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AdminKycReview } from './admin/AdminKycReview';
 import {
   CheckCircle2,
   Clock3,
@@ -320,71 +321,9 @@ export const AdminDashboardView: React.FC = () => {
       )}
 
       {tab === 'kyc' && (
-        <div className="space-y-6">
-          <div className="bg-white border rounded-2xl overflow-hidden">
-            <div className="p-5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 className="font-black text-gray-900">Documentos KYC reais</h2>
-                <p className="text-xs text-gray-500 mt-1">Cada aprovação/rejeição é persistida e auditada.</p>
-              </div>
-              <select value={documentStatus} onChange={(e) => setDocumentStatus(e.target.value)} className="border rounded-xl px-3 py-2 text-xs bg-white">
-                <option value="PENDING">PENDING</option>
-                <option value="APPROVED">APPROVED</option>
-                <option value="REJECTED">REJECTED</option>
-                <option value="">Todos</option>
-              </select>
-            </div>
-            {!documents.length ? (
-              <div className="p-10 text-center text-sm text-gray-500">Nenhum documento nesta fila.</div>
-            ) : (
-              <div className="divide-y">
-                {documents.map((doc: any) => (
-                  <div key={doc.id} className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="text-xs">
-                      <div className="font-black text-gray-900">{doc.seller?.tradeName || doc.seller?.legalName || doc.sellerId}</div>
-                      <div className="text-gray-600 mt-1">{doc.documentType} • {doc.status}</div>
-                      <div className="text-gray-400 mt-1">{date(doc.createdAt)}</div>
-                    </div>
-                    {doc.status === 'PENDING' && (
-                      <div className="flex gap-2">
-                        <button onClick={() => void rejectDocument(doc.id)} className="px-3 py-2 border border-red-200 text-red-700 rounded-xl text-xs font-bold">Rejeitar documento</button>
-                        <button onClick={() => void approveDocument(doc.id)} className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">Aprovar documento</button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white border rounded-2xl overflow-hidden">
-            <div className="p-5 border-b">
-              <h2 className="font-black text-gray-900 flex items-center gap-2"><Store className="w-4 h-4" /> Vendedores</h2>
-              <p className="text-xs text-gray-500 mt-1">
-                A aprovação final chama a validação de documentos mínimos do backend antes de conceder a role SELLER.
-              </p>
-            </div>
-            <div className="divide-y">
-              {sellers.map((seller: any) => (
-                <div key={seller.id} className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  <div className="text-xs">
-                    <div className="font-black text-gray-900">{seller.tradeName || seller.legalName}</div>
-                    <div className="text-gray-600 mt-1">
-                      {seller.sellerType} • {seller.status} • {seller.country?.name || seller.countryId}
-                    </div>
-                    <div className="text-gray-400 mt-1">{seller.user?.email || ''}</div>
-                  </div>
-                  {!['VERIFIED', 'BLOCKED'].includes(seller.status) && (
-                    <div className="flex gap-2">
-                      <button onClick={() => void rejectSeller(seller.id)} className="px-3 py-2 border border-red-200 text-red-700 rounded-xl text-xs font-bold">Rejeitar KYC</button>
-                      <button onClick={() => void approveSeller(seller.id)} className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">Aprovar KYC completo</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <AdminKycReview
+          showToast={setMessage}
+        />
       )}
 
       {tab === 'fulfillment' && (
