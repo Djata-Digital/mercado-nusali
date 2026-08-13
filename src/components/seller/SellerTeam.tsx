@@ -1,282 +1,876 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Users,
-  PlusCircle,
-  Shield,
   UserPlus,
-  Mail,
-  Phone,
-  Store,
-  CheckCircle2,
-  XCircle,
+  Shield,
   X,
   Check,
+  Loader2,
+  Trash2,
+  RefreshCw,
+  Store,
 } from 'lucide-react';
-import { SellerTeamMember, SellerStoreData } from '../../data/mockSellerData';
+import { useQuery } from '@tanstack/react-query';
+
+import {
+  SellerStoreData,
+  SellerTeamMember,
+} from '../../data/mockSellerData';
+
+import {
+  StoresApi,
+  StoreMemberReal,
+  StoreMemberRole,
+  StoreMemberStatus,
+} from '../../api/clients/StoresApi';
 
 interface SellerTeamProps {
-  team: SellerTeamMember[];
+  // Mantidos para compatibilidade temporária
+  // com o SellerHubView atual.
+  team?: SellerTeamMember[];
+  onAddMember?: (
+    member: SellerTeamMember,
+  ) => void;
+
   stores: SellerStoreData[];
-  onAddMember: (member: SellerTeamMember) => void;
+
+  selectedStoreId?: string;
+
   showToast: (msg: string) => void;
 }
 
-export const SellerTeam: React.FC<SellerTeamProps> = ({
-  team,
+const roleLabels: Record<
+  StoreMemberRole,
+  string
+> = {
+  OWNER: 'Proprietário',
+  MANAGER: 'Gerente Geral',
+  CUSTOMER_SERVICE: 'Atendimento / SAC',
+  ORDER_OPERATOR: 'Operador de Pedidos',
+  INVENTORY_MANAGER: 'Gerente de Estoque',
+  FINANCE: 'Financeiro',
+  MARKETING: 'Marketing',
+};
+
+const statusLabels: Record<
+  StoreMemberStatus,
+  string
+> = {
+  INVITED: 'Convidado',
+  ACTIVE: 'Ativo',
+  SUSPENDED: 'Suspenso',
+  REMOVED: 'Removido',
+};
+
+const roleOptions: Array<{
+  value: StoreMemberRole;
+  label: string;
+}> = [
+  {
+    value: 'MANAGER',
+    label: 'Gerente Geral',
+  },
+  {
+    value: 'CUSTOMER_SERVICE',
+    label: 'Atendimento / SAC',
+  },
+  {
+    value: 'ORDER_OPERATOR',
+    label: 'Operador de Pedidos',
+  },
+  {
+    value: 'INVENTORY_MANAGER',
+    label: 'Gerente de Estoque',
+  },
+  {
+    value: 'FINANCE',
+    label: 'Financeiro',
+  },
+  {
+    value: 'MARKETING',
+    label: 'Marketing',
+  },
+];
+
+const extractErrorMessage = (error: any) =>
+  error?.response?.data?.error?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
+
+export const SellerTeam: React.FC<
+  SellerTeamProps
+> = ({
   stores,
-  onAddMember,
+  selectedStoreId,
   showToast,
 }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<SellerTeamMember['role']>('attendant');
-  const [assignedStoreId, setAssignedStoreId] = useState('all');
+  const effectiveStoreId =
+    selectedStoreId ||
+    stores[0]?.id ||
+    '';
 
-  const roleLabels = {
-    owner: 'Proprietário (Acesso Total)',
-    manager: 'Gerente Geral de Loja',
-    attendant: 'Atendente SAC & Perguntas',
-    order_operator: 'Operador de Pedidos & Etiquetas',
-    inventory_manager: 'Gerente de Estoque & HUB',
-    financial: 'Analista Financeiro & Saques',
-    marketing: 'Analista de Marketing & Anúncios',
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
+
+  const [email, setEmail] =
+    useState('');
+
+  const [role, setRole] =
+    useState<StoreMemberRole>('MANAGER');
+
+  const [savingInvite, setSavingInvite] =
+    useState(false);
+
+  const [updatingMemberId, setUpdatingMemberId] =
+    useState<string | null>(null);
+
+  const membersQuery = useQuery({
+    queryKey: [
+      'seller-store-members-real',
+      effectiveStoreId,
+    ],
+
+    enabled: Boolean(effectiveStoreId),
+
+    queryFn: async () => {
+      const response =
+        await StoresApi.listMembers(
+          effectiveStoreId,
+        );
+
+      return response.data || [];
+    },
+
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (
+      membersQuery.isError &&
+      effectiveStoreId
+    ) {
+      showToast(
+        extractErrorMessage(
+          membersQuery.error,
+        ),
+      );
+    }
+  }, [
+    membersQuery.isError,
+    membersQuery.error,
+    effectiveStoreId,
+  ]);
+
+  const members =
+    membersQuery.data || [];
+
+  const selectedStore =
+    stores.find(
+      (store) =>
+        store.id === effectiveStoreId,
+    );
+
+  const refreshMembers = async () => {
+    await membersQuery.refetch();
   };
 
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !email) return;
+  const handleInvite = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
 
-    const newMember: SellerTeamMember = {
-      id: `tm-${Date.now()}`,
-      name,
-      email,
-      phone: phone || '+245 955000000',
-      role,
-      assignedStoreId,
-      status: 'active',
-      lastAccess: 'Nunca acessou',
-    };
+    if (!effectiveStoreId) {
+      showToast(
+        'Selecione uma loja antes de convidar um membro.',
+      );
+      return;
+    }
 
-    onAddMember(newMember);
-    showToast(`Convite enviado para ${name} (${email})!`);
-    setIsModalOpen(false);
-    setName('');
-    setEmail('');
+    if (!email.trim()) {
+      showToast(
+        'Informe o e-mail do membro.',
+      );
+      return;
+    }
+
+    try {
+      setSavingInvite(true);
+
+      const response =
+        await StoresApi.inviteMember(
+          effectiveStoreId,
+          {
+            email:
+              email.trim().toLowerCase(),
+            role,
+          },
+        );
+
+      if (!response.success) {
+        throw new Error(
+          response.error?.message ||
+            'Não foi possível criar o convite.',
+        );
+      }
+
+      /*
+       * Neste estágio o backend cria o convite real,
+       * token e validade de 7 dias.
+       *
+       * O envio automático desse convite por Resend
+       * será ligado no próximo ajuste do backend.
+       */
+
+      showToast(
+        `Convite enviado por e-mail para ${email.trim()}.`,
+      );
+
+      setEmail('');
+      setRole('MANAGER');
+      setIsModalOpen(false);
+
+      await refreshMembers();
+    } catch (error: any) {
+      showToast(
+        extractErrorMessage(error),
+      );
+    } finally {
+      setSavingInvite(false);
+    }
   };
 
-  // Permission Matrix Schema
+  const handleUpdateMember = async (
+    member: StoreMemberReal,
+    newRole: StoreMemberRole,
+    newStatus: StoreMemberStatus,
+  ) => {
+    if (member.role === 'OWNER') {
+      showToast(
+        'O papel OWNER não pode ser alterado diretamente.',
+      );
+      return;
+    }
+
+    try {
+      setUpdatingMemberId(
+        member.id,
+      );
+
+      const response =
+        await StoresApi.updateMember(
+          effectiveStoreId,
+          member.id,
+          {
+            role: newRole,
+            status: newStatus,
+          },
+        );
+
+      if (!response.success) {
+        throw new Error(
+          response.error?.message ||
+            'Não foi possível atualizar o membro.',
+        );
+      }
+
+      showToast(
+        'Membro atualizado com sucesso.',
+      );
+
+      await refreshMembers();
+    } catch (error: any) {
+      showToast(
+        extractErrorMessage(error),
+      );
+    } finally {
+      setUpdatingMemberId(null);
+    }
+  };
+
+  const handleRemoveMember = async (
+    member: StoreMemberReal,
+  ) => {
+    if (member.role === 'OWNER') {
+      showToast(
+        'O proprietário da loja não pode ser removido.',
+      );
+      return;
+    }
+
+    const memberName =
+      member.user
+        ? `${member.user.firstName} ${member.user.lastName}`.trim()
+        : 'este membro';
+
+    const confirmed =
+      window.confirm(
+        `Deseja remover ${memberName} da equipe desta loja?`,
+      );
+
+    if (!confirmed) return;
+
+    try {
+      setUpdatingMemberId(
+        member.id,
+      );
+
+      const response =
+        await StoresApi.removeMember(
+          effectiveStoreId,
+          member.id,
+        );
+
+      if (!response.success) {
+        throw new Error(
+          response.error?.message ||
+            'Não foi possível remover o membro.',
+        );
+      }
+
+      showToast(
+        'Membro removido com sucesso.',
+      );
+
+      await refreshMembers();
+    } catch (error: any) {
+      showToast(
+        extractErrorMessage(error),
+      );
+    } finally {
+      setUpdatingMemberId(null);
+    }
+  };
+
+  /*
+   * Esta matriz reflete as regras atuais
+   * de StorePermissionsService.
+   */
   const permissionModules = [
-    { name: 'Visão Geral & Métricas', rolesAllowed: ['owner', 'manager', 'financial'] },
-    { name: 'Gestão de Produtos & IA', rolesAllowed: ['owner', 'manager', 'inventory_manager', 'marketing'] },
-    { name: 'Estoque & Armazéns HUB', rolesAllowed: ['owner', 'manager', 'inventory_manager'] },
-    { name: 'Processamento de Pedidos', rolesAllowed: ['owner', 'manager', 'order_operator'] },
-    { name: 'Finanças & Saques (Orange/Bank)', rolesAllowed: ['owner', 'financial'] },
-    { name: 'Marketing & Cupons', rolesAllowed: ['owner', 'manager', 'marketing'] },
-    { name: 'Atendimento & SAC Chat', rolesAllowed: ['owner', 'manager', 'attendant'] },
+    {
+      name: 'Gerenciar Equipe',
+      roles: [
+        'OWNER',
+        'MANAGER',
+      ],
+    },
+
+    {
+      name: 'Gerenciar Produtos',
+      roles: [
+        'OWNER',
+        'MANAGER',
+        'INVENTORY_MANAGER',
+      ],
+    },
+
+    {
+      name: 'Visualizar Estoque',
+      roles: [
+        'OWNER',
+        'MANAGER',
+        'CUSTOMER_SERVICE',
+        'ORDER_OPERATOR',
+        'INVENTORY_MANAGER',
+        'FINANCE',
+      ],
+    },
+
+    {
+      name: 'Gerenciar Estoque',
+      roles: [
+        'OWNER',
+        'MANAGER',
+        'INVENTORY_MANAGER',
+      ],
+    },
+
+    {
+      name: 'Dados Financeiros',
+      roles: [
+        'OWNER',
+        'FINANCE',
+      ],
+    },
+
+    {
+      name: 'Atendimento ao Cliente',
+      roles: [
+        'OWNER',
+        'MANAGER',
+        'CUSTOMER_SERVICE',
+      ],
+    },
   ];
+
+  const matrixRoles: Array<{
+    value: StoreMemberRole;
+    short: string;
+  }> = [
+    {
+      value: 'OWNER',
+      short: 'Proprietário',
+    },
+    {
+      value: 'MANAGER',
+      short: 'Gerente',
+    },
+    {
+      value: 'CUSTOMER_SERVICE',
+      short: 'SAC',
+    },
+    {
+      value: 'ORDER_OPERATOR',
+      short: 'Pedidos',
+    },
+    {
+      value: 'INVENTORY_MANAGER',
+      short: 'Estoque',
+    },
+    {
+      value: 'FINANCE',
+      short: 'Financeiro',
+    },
+    {
+      value: 'MARKETING',
+      short: 'Marketing',
+    },
+  ];
+
+  if (!stores.length) {
+    return (
+      <div className="bg-white rounded-2xl border border-gray-200 p-10 text-center">
+        <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+
+        <h2 className="font-black text-gray-900">
+          Nenhuma loja cadastrada
+        </h2>
+
+        <p className="text-xs text-gray-500 mt-1">
+          Cadastre uma loja antes de configurar
+          sua equipe.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Top Banner */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-black text-gray-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-emerald-700" /> Equipe da Loja & Matriz de Permissões
+            <Users className="w-6 h-6 text-emerald-700" />
+            Equipe da Loja
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Adicione funcionários e colaboradores com permissões específicas para gerenciar pedidos, responder clientes ou gerir finanças.
+            Loja atual:{' '}
+            <strong className="text-gray-900">
+              {selectedStore?.name ||
+                'Loja selecionada'}
+            </strong>
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 shadow-xs shrink-0"
-        >
-          <UserPlus className="w-4 h-4" /> Convidar Novo Membro
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void refreshMembers()
+            }
+            className="p-2.5 border border-gray-200 rounded-xl"
+            title="Atualizar equipe"
+          >
+            <RefreshCw
+              className={`w-4 h-4 ${
+                membersQuery.isFetching
+                  ? 'animate-spin'
+                  : ''
+              }`}
+            />
+          </button>
 
-      {/* Team Members List */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-4">
-        <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3">
-          Membros da Equipe Cadastrados ({team.length})
-        </h2>
-
-        <div className="divide-y divide-gray-100">
-          {team.map((m) => {
-            const assignedStore = stores.find((s) => s.id === m.assignedStoreId);
-
-            return (
-              <div key={m.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white font-black flex items-center justify-center text-xs shrink-0">
-                    {m.name.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <span className="font-bold text-gray-900 block">{m.name}</span>
-                    <span className="text-gray-500 font-mono text-[11px] block">{m.email} • {m.phone}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 flex-wrap">
-                  <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-2.5 py-1 rounded-lg text-[11px]">
-                    {roleLabels[m.role]}
-                  </span>
-
-                  <span className="text-gray-500 font-medium text-[11px]">
-                    Loja: <strong className="text-gray-800">{assignedStore ? assignedStore.name : 'Todas as Lojas'}</strong>
-                  </span>
-
-                  <span className="text-gray-400 font-mono text-[10px]">
-                    {m.lastAccess}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          <button
+            type="button"
+            onClick={() =>
+              setIsModalOpen(true)
+            }
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            Convidar Membro
+          </button>
         </div>
       </div>
 
-      {/* Visual Permission Matrix Table */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-4">
-        <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-emerald-700" /> Matriz Visual de Permissões por Função
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs">
+        <h2 className="text-sm font-bold text-gray-900 border-b border-gray-100 pb-3">
+          Membros da Equipe ({members.length})
         </h2>
 
+        {membersQuery.isLoading ? (
+          <div className="py-12 flex justify-center">
+            <Loader2 className="w-7 h-7 text-emerald-600 animate-spin" />
+          </div>
+        ) : !members.length ? (
+          <div className="py-10 text-center text-xs text-gray-500">
+            Nenhum membro encontrado nesta loja.
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {members.map((member) => {
+              const fullName =
+                member.user
+                  ? `${member.user.firstName} ${member.user.lastName}`.trim()
+                  : 'Usuário';
+
+              const busy =
+                updatingMemberId ===
+                member.id;
+
+              const isOwner =
+                member.role === 'OWNER';
+
+              return (
+                <div
+                  key={member.id}
+                  className="py-5 space-y-4"
+                >
+                  <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white font-black flex items-center justify-center text-xs">
+                        {fullName
+                          .substring(0, 2)
+                          .toUpperCase()}
+                      </div>
+
+                      <div className="min-w-0">
+                        <span className="font-bold text-gray-900 block truncate">
+                          {fullName}
+                        </span>
+
+                        <span className="text-gray-500 font-mono text-[11px] block truncate">
+                          {member.user?.email ||
+                            'E-mail não disponível'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isOwner ? (
+                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold px-3 py-2 rounded-xl text-[11px]">
+                          Proprietário
+                        </span>
+                      ) : (
+                        <select
+                          value={member.role}
+                          disabled={busy}
+                          onChange={(e) =>
+                            void handleUpdateMember(
+                              member,
+                              e.target
+                                .value as StoreMemberRole,
+                              member.status,
+                            )
+                          }
+                          className="p-2 border border-gray-300 rounded-xl text-[11px] bg-white font-bold"
+                        >
+                          {roleOptions.map(
+                            (option) => (
+                              <option
+                                key={
+                                  option.value
+                                }
+                                value={
+                                  option.value
+                                }
+                              >
+                                {
+                                  option.label
+                                }
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      )}
+
+                      {isOwner ? (
+                        <span className="bg-gray-100 text-gray-700 px-3 py-2 rounded-xl text-[11px] font-bold">
+                          {statusLabels[
+                            member.status
+                          ]}
+                        </span>
+                      ) : (
+                        <select
+                          value={member.status}
+                          disabled={busy}
+                          onChange={(e) =>
+                            void handleUpdateMember(
+                              member,
+                              member.role,
+                              e.target
+                                .value as StoreMemberStatus,
+                            )
+                          }
+                          className="p-2 border border-gray-300 rounded-xl text-[11px] bg-white"
+                        >
+                          <option value="ACTIVE">
+                            Ativo
+                          </option>
+
+                          <option value="SUSPENDED">
+                            Suspenso
+                          </option>
+
+                          <option value="INVITED">
+                            Convidado
+                          </option>
+                        </select>
+                      )}
+
+                      {!isOwner && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void handleRemoveMember(
+                              member,
+                            )
+                          }
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl disabled:opacity-50"
+                          title="Remover membro"
+                        >
+                          {busy ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-gray-400">
+                    Cargo:{' '}
+                    <strong>
+                      {
+                        roleLabels[
+                          member.role
+                        ]
+                      }
+                    </strong>{' '}
+                    • Status:{' '}
+                    <strong>
+                      {
+                        statusLabels[
+                          member.status
+                        ]
+                      }
+                    </strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-2xs space-y-4">
+        <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <Shield className="w-4 h-4 text-emerald-700" />
+          Matriz de Permissões
+        </h2>
+
+        <p className="text-[11px] text-gray-500">
+          Esta matriz corresponde às permissões
+          atualmente aplicadas pelo backend.
+        </p>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-700">
-                <th className="p-3 font-bold">Módulo da Central</th>
-                <th className="p-3 font-bold text-center">Proprietário</th>
-                <th className="p-3 font-bold text-center">Gerente</th>
-                <th className="p-3 font-bold text-center">Atendente SAC</th>
-                <th className="p-3 font-bold text-center">Operador Pedidos</th>
-                <th className="p-3 font-bold text-center">Estoque HUB</th>
-                <th className="p-3 font-bold text-center">Financeiro</th>
+              <tr className="bg-gray-50 border-b">
+                <th className="p-3">
+                  Operação
+                </th>
+
+                {matrixRoles.map(
+                  (roleItem) => (
+                    <th
+                      key={
+                        roleItem.value
+                      }
+                      className="p-3 text-center"
+                    >
+                      {
+                        roleItem.short
+                      }
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {permissionModules.map((pm, idx) => (
-                <tr key={idx} className="hover:bg-gray-50/50">
-                  <td className="p-3 font-bold text-gray-900">{pm.name}</td>
-                  {(['owner', 'manager', 'attendant', 'order_operator', 'inventory_manager', 'financial'] as const).map(
-                    (r) => {
-                      const hasPerm = pm.rolesAllowed.includes(r);
-                      return (
-                        <td key={r} className="p-3 text-center">
-                          {hasPerm ? (
-                            <Check className="w-4 h-4 text-emerald-600 mx-auto font-black" />
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
-                        </td>
-                      );
-                    }
-                  )}
-                </tr>
-              ))}
+
+            <tbody className="divide-y">
+              {permissionModules.map(
+                (module) => (
+                  <tr
+                    key={module.name}
+                  >
+                    <td className="p-3 font-bold">
+                      {module.name}
+                    </td>
+
+                    {matrixRoles.map(
+                      (roleItem) => {
+                        const allowed =
+                          module.roles.includes(
+                            roleItem.value,
+                          );
+
+                        return (
+                          <td
+                            key={
+                              roleItem.value
+                            }
+                            className="p-3 text-center"
+                          >
+                            {allowed ? (
+                              <Check className="w-4 h-4 text-emerald-600 mx-auto" />
+                            ) : (
+                              <span className="text-gray-300">
+                                —
+                              </span>
+                            )}
+                          </td>
+                        );
+                      },
+                    )}
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Invite Member Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-emerald-700" /> Convidar Membro para a Equipe
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="font-bold text-base flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-emerald-700" />
+                  Convidar Membro
+                </h3>
+
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Loja:{' '}
+                  {selectedStore?.name}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={savingInvite}
+                onClick={() =>
+                  setIsModalOpen(false)
+                }
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleInvite} className="space-y-4 text-xs">
+            <form
+              onSubmit={handleInvite}
+              className="space-y-4 text-xs"
+            >
               <div>
-                <label className="block text-gray-700 font-bold mb-1">Nome Completo *</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Mariama Djalo"
-                  required
-                  className="w-full p-2.5 border border-gray-300 rounded-xl"
-                />
-              </div>
+                <label className="block font-bold mb-1">
+                  E-mail do Usuário *
+                </label>
 
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">E-mail Corporativo *</label>
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="mariama@silvatech.gw"
+                  onChange={(e) =>
+                    setEmail(
+                      e.target.value,
+                    )
+                  }
                   required
+                  placeholder="usuario@email.com"
                   className="w-full p-2.5 border border-gray-300 rounded-xl"
                 />
+
+                <p className="text-[10px] text-gray-400 mt-1">
+                  O convite fica vinculado exatamente
+                  a este endereço de e-mail.
+                </p>
               </div>
 
               <div>
-                <label className="block text-gray-700 font-bold mb-1">Telefone / WhatsApp</label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+245 955987654"
-                  className="w-full p-2.5 border border-gray-300 rounded-xl"
-                />
-              </div>
+                <label className="block font-bold mb-1">
+                  Cargo *
+                </label>
 
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">Função / Cargo *</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as any)}
+                  onChange={(e) =>
+                    setRole(
+                      e.target
+                        .value as StoreMemberRole,
+                    )
+                  }
                   className="w-full p-2.5 border border-gray-300 rounded-xl bg-white font-bold"
                 >
-                  <option value="manager">Gerente Geral de Loja</option>
-                  <option value="attendant">Atendente SAC & Perguntas</option>
-                  <option value="order_operator">Operador de Pedidos & Etiquetas</option>
-                  <option value="inventory_manager">Gerente de Estoque & HUB</option>
-                  <option value="financial">Analista Financeiro & Saques</option>
-                  <option value="marketing">Analista de Marketing & Anúncios</option>
+                  {roleOptions.map(
+                    (option) => (
+                      <option
+                        key={
+                          option.value
+                        }
+                        value={
+                          option.value
+                        }
+                      >
+                        {
+                          option.label
+                        }
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-gray-700 font-bold mb-1">Loja Atribuída *</label>
-                <select
-                  value={assignedStoreId}
-                  onChange={(e) => setAssignedStoreId(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl bg-white"
-                >
-                  <option value="all">Todas as Lojas (Acesso Global)</option>
-                  {stores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-xl text-gray-700 font-bold hover:bg-gray-50"
+                  disabled={savingInvite}
+                  onClick={() =>
+                    setIsModalOpen(false)
+                  }
+                  className="px-4 py-2 border rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-xs"
+                  disabled={savingInvite}
+                  className="px-5 py-2.5 bg-emerald-600 text-white font-bold rounded-xl flex items-center gap-2 disabled:opacity-50"
                 >
-                  <UserPlus className="w-4 h-4" /> Enviar Convite por E-mail
+                  {savingInvite ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      Criar Convite
+                    </>
+                  )}
                 </button>
               </div>
             </form>

@@ -48,13 +48,11 @@ import { SellerProductWizard } from './seller/SellerProductWizard';
 import { SellerOnboardingForm } from './seller/SellerOnboardingForm';
 
 import {
-  initialSellerTeam,
   initialWarehouses,
   initialSellerQuestions,
   initialSellerCustomers,
   SellerProfileData,
   SellerStoreData,
-  SellerTeamMember,
   SellerQuestion,
 } from '../data/mockSellerData';
 
@@ -113,11 +111,6 @@ export const SellerHubView: React.FC = () => {
 
   const [toastMessage, setToastMessage] =
     useState<string | null>(null);
-
-  const [team, setTeam] =
-    useState<SellerTeamMember[]>(
-      initialSellerTeam,
-    );
 
   const [warehouses] =
     useState(initialWarehouses);
@@ -498,19 +491,6 @@ export const SellerHubView: React.FC = () => {
               }
             : question,
       ),
-    );
-  };
-
-  const handleAddTeamMember = (
-    member: SellerTeamMember,
-  ) => {
-    setTeam((current) => [
-      ...current,
-      member,
-    ]);
-
-    showToast(
-      'Membro adicionado localmente. A integração da equipe com o backend será conectada na próxima etapa.',
     );
   };
 
@@ -946,10 +926,9 @@ export const SellerHubView: React.FC = () => {
         {activeSection ===
           'team' && (
           <SellerTeam
-            team={team}
             stores={stores}
-            onAddMember={
-              handleAddTeamMember
+            selectedStoreId={
+              selectedStoreId
             }
             showToast={
               showToast

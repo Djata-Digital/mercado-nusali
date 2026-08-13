@@ -11,6 +11,7 @@ import { StorePermissionsService } from '../../common/services/store-permissions
 import { HashUtil } from '../../common/utils/hash.util';
 import { StoreMemberRole, StoreMemberStatus } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class StoreMembersService {
@@ -18,6 +19,7 @@ export class StoreMembersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly storePermissionsService: StorePermissionsService,
+    private readonly mailService: MailService,
   ) {}
 
   async inviteMember(
@@ -73,6 +75,71 @@ export class StoreMembersService {
       },
     });
 
+    const [store, inviter] = await Promise.all([
+      this.prisma.store.findUnique({
+        where: {
+          id: storeId,
+        },
+        select: {
+          name: true,
+        },
+      }),
+
+      this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          firstName: true,
+          lastName: true,
+        },
+      }),
+    ]);
+
+    if (!store) {
+      throw new NotFoundException(
+        'Loja não encontrada.',
+      );
+    }
+
+    const roleLabels: Record<
+      StoreMemberRole,
+      string
+    > = {
+      OWNER: 'Proprietário',
+      MANAGER: 'Gerente Geral',
+      CUSTOMER_SERVICE: 'Atendimento / SAC',
+      ORDER_OPERATOR: 'Operador de Pedidos',
+      INVENTORY_MANAGER: 'Gerente de Estoque',
+      FINANCE: 'Financeiro',
+      MARKETING: 'Marketing',
+    };
+
+    const frontendUrl =
+      process.env.FRONTEND_URL?.trim() ||
+      process.env.CORS_ORIGIN
+        ?.split(',')
+        .map((value) => value.trim())
+        .find(Boolean) ||
+      'http://localhost:5173';
+
+    const invitationUrl =
+      `${frontendUrl.replace(/\/+$/, '')}` +
+      `/store-invitation/${encodeURIComponent(rawToken)}`;
+
+    const inviterName = inviter
+      ? `${inviter.firstName} ${inviter.lastName}`.trim()
+      : undefined;
+
+    await this.mailService.sendStoreInvitationEmail({
+      to: invitation.email,
+      storeName: store.name,
+      inviterName,
+      roleLabel: roleLabels[role],
+      invitationUrl,
+      expiresAt,
+    });
+
     await this.auditService.log({
       userId,
       action: 'STORE_MEMBER_INVITED',
@@ -88,8 +155,7 @@ export class StoreMembersService {
       storeId: invitation.storeId,
       email: invitation.email,
       role: invitation.role,
-      token: rawToken,
-      expiresAt: invitation.expiresAt,
+      expiresAt,
     };
   }
 

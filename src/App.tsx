@@ -50,6 +50,7 @@ import { SellerDashboardPage } from './pages/SellerDashboardPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { FRONTEND_FEATURES } from './config/features';
 import { FeatureUnavailablePage } from './components/FeatureUnavailablePage';
+import { StoreInvitationPage } from './pages/StoreInvitationPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -122,6 +123,7 @@ export default function App() {
 
                   {/* Protected Buyer Routes */}
                   <Route element={<ProtectedRoute />}>
+                    <Route path="/store-invitation/:token" element={<StoreInvitationPage />} />
                     <Route path="/checkout" element={<CheckoutPage />} />
                     <Route path="/orders" element={<MyOrdersPage />} />
                     <Route path="/orders/confirmation" element={<OrderConfirmationPage />} />
