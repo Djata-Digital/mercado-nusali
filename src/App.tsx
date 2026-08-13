@@ -145,7 +145,7 @@ export default function App() {
                 {/* Seller Routes */}
                 <Route
                   element={
-                    <RoleRoute allowedRoles={['SELLER', 'ADMIN', 'GLOBAL_ADMIN']}>
+                    <RoleRoute allowedRoles={['SELLER']}>
                       {FRONTEND_FEATURES.SELLER_PORTAL ? (
                         <SellerLayout />
                       ) : (

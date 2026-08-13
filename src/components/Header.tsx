@@ -643,7 +643,7 @@ export const Header: React.FC = () => {
                       <KeyRound className="w-4 h-4 text-purple-700" /> Segurança da Conta
                     </button>
 
-                    {(user?.role === 'SELLER' || user?.role === 'ADMIN' || user?.role === 'GLOBAL_ADMIN') && (
+                    {user?.role === 'SELLER' && (
                       <button
                         onClick={() => {
                           navigate('/seller');
