@@ -1,5 +1,20 @@
-import React, { useState } from 'react';
-import { Layers, Plus, Edit2, Trash2, Tag, Percent, X, Check } from 'lucide-react';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
+  Check,
+  Edit2,
+  Layers,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from 'lucide-react';
+
+import { CategoriesApi } from '../../api/clients/CategoriesApi';
 
 interface AdminCategoriesManagerProps {
   showToast: (msg: string) => void;
@@ -8,78 +23,193 @@ interface AdminCategoriesManagerProps {
 interface CategoryItem {
   id: string;
   name: string;
-  prods: number;
-  commission: string;
-  status: string;
+  slug?: string;
+  description?: string | null;
+  status?: string;
+  isActive?: boolean;
+  productCount?: number;
+  _count?: {
+    products?: number;
+  };
 }
 
-export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({ showToast }) => {
-  const [categories, setCategories] = useState<CategoryItem[]>([
-    { id: 'CAT-1', name: 'Eletrônicos & Tecnologia', prods: 4500, commission: '4.5%', status: 'Ativa' },
-    { id: 'CAT-2', name: 'Energia Solar & Sustentabilidade', prods: 1200, commission: '4.0%', status: 'Ativa' },
-    { id: 'CAT-3', name: 'Agropecuária & Maquinaria', prods: 890, commission: '3.5%', status: 'Ativa' },
-    { id: 'CAT-4', name: 'Moda, Artesanato & Cultura CPLP', prods: 6200, commission: '5.0%', status: 'Ativa' },
-    { id: 'CAT-5', name: 'Alimentos & Produtos Típicos (Caju, Mel, Pimenta)', prods: 3100, commission: '4.0%', status: 'Ativa' }
-  ]);
+const unwrap = (response: any): CategoryItem[] => {
+  const data = response?.data;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
 
-  const [formName, setFormName] = useState('');
-  const [formCommission, setFormCommission] = useState('4.5%');
-  const [formStatus, setFormStatus] = useState('Ativa');
+  return [];
+};
 
-  const handleOpenCreate = () => {
+const errorMessage = (error: any) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
+
+const slugify = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+export const AdminCategoriesManager: React.FC<
+  AdminCategoriesManagerProps
+> = ({ showToast }) => {
+  const [categories, setCategories] =
+    useState<CategoryItem[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [isModalOpen, setIsModalOpen] =
+    useState(false);
+
+  const [
+    editingCategory,
+    setEditingCategory,
+  ] = useState<CategoryItem | null>(null);
+
+  const [formName, setFormName] =
+    useState('');
+
+  const [
+    formDescription,
+    setFormDescription,
+  ] = useState('');
+
+  const [formActive, setFormActive] =
+    useState(true);
+
+  const loadCategories = async () => {
+    try {
+      setLoading(true);
+
+      const response =
+        await CategoriesApi.listAdmin();
+
+      setCategories(unwrap(response));
+    } catch (error: any) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadCategories();
+  }, []);
+
+  const openCreate = () => {
     setEditingCategory(null);
     setFormName('');
-    setFormCommission('4.5%');
-    setFormStatus('Ativa');
+    setFormDescription('');
+    setFormActive(true);
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (c: CategoryItem) => {
-    setEditingCategory(c);
-    setFormName(c.name);
-    setFormCommission(c.commission);
-    setFormStatus(c.status);
+  const openEdit = (
+    category: CategoryItem,
+  ) => {
+    setEditingCategory(category);
+    setFormName(category.name);
+    setFormDescription(
+      category.description || '',
+    );
+
+    setFormActive(
+      category.isActive ??
+        category.status !== 'INACTIVE',
+    );
+
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      showToast('Por favor, digite o nome da categoria.');
+  const handleSave = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    const name = formName.trim();
+
+    if (!name) {
+      showToast(
+        'Informe o nome da categoria.',
+      );
       return;
     }
 
-    if (editingCategory) {
-      setCategories(prev =>
-        prev.map(c =>
-          c.id === editingCategory.id
-            ? { ...c, name: formName, commission: formCommission, status: formStatus }
-            : c
-        )
-      );
-      showToast(`Categoria "${formName}" atualizada com sucesso!`);
-    } else {
-      const newCat: CategoryItem = {
-        id: `CAT-${Date.now().toString().slice(-4)}`,
-        name: formName,
-        prods: 0,
-        commission: formCommission,
-        status: formStatus
-      };
-      setCategories(prev => [...prev, newCat]);
-      showToast(`Nova categoria "${formName}" criada com sucesso!`);
-    }
+    const payload = {
+      name,
+      slug:
+        editingCategory?.slug ||
+        slugify(name),
+      description:
+        formDescription.trim() ||
+        undefined,
+      isActive: formActive,
+    };
 
-    setIsModalOpen(false);
+    try {
+      setSaving(true);
+
+      if (editingCategory) {
+        await CategoriesApi.update(
+          editingCategory.id,
+          payload,
+        );
+
+        showToast(
+          `Categoria "${name}" atualizada.`,
+        );
+      } else {
+        await CategoriesApi.create(
+          payload,
+        );
+
+        showToast(
+          `Categoria "${name}" criada.`,
+        );
+      }
+
+      setIsModalOpen(false);
+      await loadCategories();
+    } catch (error: any) {
+      showToast(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (confirm(`Tem certeza que deseja excluir a categoria "${name}"?`)) {
-      setCategories(prev => prev.filter(c => c.id !== id));
-      showToast(`Categoria "${name}" removida com sucesso.`);
+  const handleDelete = async (
+    category: CategoryItem,
+  ) => {
+    const confirmed = window.confirm(
+      `Excluir a categoria "${category.name}"?`,
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await CategoriesApi.delete(
+        category.id,
+      );
+
+      showToast(
+        `Categoria "${category.name}" removida.`,
+      );
+
+      await loadCategories();
+    } catch (error: any) {
+      showToast(errorMessage(error));
     }
   };
 
@@ -89,138 +219,255 @@ export const AdminCategoriesManager: React.FC<AdminCategoriesManagerProps> = ({ 
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
             <Layers className="w-6 h-6 text-purple-600" />
-            Gestão da Árvore de Categorias & Comissões
+            Gestão de Categorias
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Mapeamento de categorias e comissões da plataforma para o mercado CPLP.
+            Estrutura real de categorias
+            persistida no marketplace.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Criar Categoria
-        </button>
-      </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void loadCategories()
+            }
+            className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
 
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase font-black text-[10px]">
-                <th className="p-3">Categoria</th>
-                <th className="p-3">Produtos Ativos</th>
-                <th className="p-3">Comissão Base</th>
-                <th className="p-3">Status</th>
-                <th className="p-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {categories.map(c => (
-                <tr key={c.id} className="hover:bg-gray-50/50">
-                  <td className="p-3 font-extrabold text-gray-900">{c.name}</td>
-                  <td className="p-3 font-bold text-gray-700">{c.prods} produtos</td>
-                  <td className="p-3 font-black text-purple-700">{c.commission}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      c.status === 'Ativa' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleOpenEdit(c)}
-                        className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg cursor-pointer"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(c.id, c.name)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            Criar Categoria
+          </button>
         </div>
       </div>
 
-      {/* Modal Criar / Editar Categoria */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="p-12 flex justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+          </div>
+        ) : !categories.length ? (
+          <div className="p-12 text-center text-sm text-gray-500">
+            Nenhuma categoria cadastrada.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b text-gray-500 uppercase font-black text-[10px]">
+                  <th className="p-3">
+                    Categoria
+                  </th>
+                  <th className="p-3">
+                    Slug
+                  </th>
+                  <th className="p-3">
+                    Produtos
+                  </th>
+                  <th className="p-3">
+                    Status
+                  </th>
+                  <th className="p-3 text-right">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y">
+                {categories.map(
+                  (category) => {
+                    const active =
+                      category.isActive ??
+                      category.status !==
+                        'INACTIVE';
+
+                    const products =
+                      category._count
+                        ?.products ??
+                      category.productCount ??
+                      0;
+
+                    return (
+                      <tr
+                        key={category.id}
+                      >
+                        <td className="p-3">
+                          <div className="font-extrabold">
+                            {category.name}
+                          </div>
+
+                          {category.description && (
+                            <div className="text-[10px] text-gray-400 mt-1 max-w-md">
+                              {
+                                category.description
+                              }
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="p-3 font-mono text-gray-500">
+                          {category.slug ||
+                            '—'}
+                        </td>
+
+                        <td className="p-3 font-bold">
+                          {products}
+                        </td>
+
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-[10px] font-black ${
+                              active
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {active
+                              ? 'ATIVA'
+                              : 'INATIVA'}
+                          </span>
+                        </td>
+
+                        <td className="p-3">
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openEdit(
+                                  category,
+                                )
+                              }
+                              className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleDelete(
+                                  category,
+                                )
+                              }
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  },
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-purple-600" />
-                {editingCategory ? 'Editar Categoria' : 'Criar Nova Categoria'}
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-black">
+                {editingCategory
+                  ? 'Editar Categoria'
+                  : 'Criar Categoria'}
               </h3>
+
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                type="button"
+                onClick={() =>
+                  setIsModalOpen(false)
+                }
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <form
+              onSubmit={handleSave}
+              className="space-y-4 mt-4 text-xs"
+            >
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome da Categoria:</label>
+                <label className="font-bold block mb-1">
+                  Nome
+                </label>
+
                 <input
-                  type="text"
                   required
-                  placeholder="Ex: Alimentos & Frutas Tropicais"
                   value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
+                  onChange={(event) =>
+                    setFormName(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Comissão Base (%):</label>
+                <label className="font-bold block mb-1">
+                  Descrição
+                </label>
+
+                <textarea
+                  value={formDescription}
+                  onChange={(event) =>
+                    setFormDescription(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5 min-h-[90px]"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 font-bold">
                 <input
-                  type="text"
-                  required
-                  placeholder="Ex: 4.5%"
-                  value={formCommission}
-                  onChange={e => setFormCommission(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
+                  type="checkbox"
+                  checked={formActive}
+                  onChange={(event) =>
+                    setFormActive(
+                      event.target.checked,
+                    )
+                  }
                 />
-              </div>
+                Categoria ativa
+              </label>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Status:</label>
-                <select
-                  value={formStatus}
-                  onChange={e => setFormStatus(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
-                >
-                  <option value="Ativa">Ativa</option>
-                  <option value="Inativa">Inativa</option>
-                </select>
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-3 border-t">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+                  onClick={() =>
+                    setIsModalOpen(false)
+                  }
+                  className="px-4 py-2 border rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
+                  disabled={saving}
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
+                  className="px-5 py-2 bg-purple-600 text-white rounded-xl font-extrabold flex items-center gap-2 disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" /> Salvar Categoria
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+
+                  Salvar
                 </button>
               </div>
             </form>

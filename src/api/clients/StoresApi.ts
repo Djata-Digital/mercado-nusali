@@ -324,4 +324,37 @@ export class StoresApi {
       {},
     );
   }
+
+  // ============================================================
+  // ADMIN
+  // ============================================================
+
+  static listAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    countryId?: string;
+    sellerId?: string;
+    search?: string;
+  }): Promise<ApiResponse<any>> {
+    return apiClient.get(
+      '/admin/stores',
+      {
+        params,
+      },
+    );
+  }
+
+  static updateAdminStatus(
+    storeId: string,
+    data: {
+      status: string;
+      reason?: string;
+    },
+  ): Promise<ApiResponse<StoreReal>> {
+    return apiClient.patch(
+      `/admin/stores/${storeId}/status`,
+      data,
+    );
+  }
 }

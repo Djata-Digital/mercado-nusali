@@ -1,288 +1,626 @@
-import React, { useState } from 'react';
-import { Building2, Star, Shield, AlertTriangle, Eye, Sparkles, CheckCircle, Ban, Plus, X, Check } from 'lucide-react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
-interface AdminStoresManagerProps {
-  showToast: (msg: string) => void;
+import {
+  Ban,
+  Building2,
+  CheckCircle2,
+  Eye,
+  Loader2,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Store,
+  X,
+} from 'lucide-react';
+
+import {
+  StoreReal,
+  StoresApi,
+} from '../../api/clients/StoresApi';
+
+interface Props {
+  showToast: (
+    message: string,
+  ) => void;
 }
 
-interface StoreItem {
-  id: string;
-  name: string;
-  seller: string;
-  country: string;
-  category: string;
-  prods: number;
-  rating: number;
-  sales: string;
-  status: string;
-  highlighted: boolean;
-}
+const unwrap = (
+  response: any,
+): StoreReal[] => {
+  const data = response?.data;
 
-export const AdminStoresManager: React.FC<AdminStoresManagerProps> = ({ showToast }) => {
-  const [stores, setStores] = useState<StoreItem[]>([
-    { id: 'STR-1', name: 'Bissau Tech Official Store', seller: 'Carlos Biai', country: 'GW', category: 'Eletrônicos & Tecnologia', prods: 48, rating: 4.9, sales: '38.500.000 XOF', status: 'Ativa', highlighted: true },
-    { id: 'STR-2', name: 'Nusali Agro Bissau', seller: 'Soluções Agrícolas Lda', country: 'GW', category: 'Agricultura & Ferramentas', prods: 35, rating: 5.0, sales: '124.000.000 XOF', status: 'Destacada', highlighted: true },
-    { id: 'STR-3', name: 'Moda Afro CPLP BR', seller: 'Ana Paula Rocha', country: 'BR', category: 'Moda & Acessórios', prods: 82, rating: 4.8, sales: 'R$ 185.000', status: 'Ativa', highlighted: false },
-  ]);
+  if (Array.isArray(data)) {
+    return data;
+  }
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [warningStore, setWarningStore] = useState<StoreItem | null>(null);
-  const [warningReason, setWarningReason] = useState('');
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
 
-  // Form for New Store
-  const [name, setName] = useState('');
-  const [seller, setSeller] = useState('');
-  const [country, setCountry] = useState('GW');
-  const [category, setCategory] = useState('Eletrônicos & Tecnologia');
+  return [];
+};
 
-  const handleCreateStore = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !seller.trim()) {
-      showToast('Por favor, informe o nome da loja e do vendedor.');
-      return;
-    }
+const getErrorMessage = (
+  error: any,
+) =>
+  error?.response?.data?.error
+    ?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
 
-    const newStore: StoreItem = {
-      id: `STR-${Date.now().toString().slice(-4)}`,
-      name,
-      seller,
-      country,
-      category,
-      prods: 0,
-      rating: 5.0,
-      sales: '0 XOF',
-      status: 'Ativa',
-      highlighted: false
+const statusLabel = (
+  status?: string,
+) => {
+  switch (status) {
+    case 'ACTIVE':
+      return 'Ativa';
+
+    case 'SUSPENDED':
+      return 'Suspensa';
+
+    case 'CLOSED':
+      return 'Fechada';
+
+    case 'PENDING':
+      return 'Pendente';
+
+    default:
+      return status || '-';
+  }
+};
+
+export const AdminStoresManager:
+React.FC<Props> = ({
+  showToast,
+}) => {
+  const [
+    stores,
+    setStores,
+  ] = useState<StoreReal[]>([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    search,
+    setSearch,
+  ] = useState('');
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState('');
+
+  const [
+    selectedStore,
+    setSelectedStore,
+  ] =
+    useState<any | null>(null);
+
+  const [
+    actionLoading,
+    setActionLoading,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const loadStores =
+    async () => {
+      try {
+        setLoading(true);
+
+        const response =
+          await StoresApi.listAdmin(
+            {
+              page: 1,
+              limit: 100,
+
+              status:
+                statusFilter ||
+                undefined,
+
+              search:
+                search.trim() ||
+                undefined,
+            },
+          );
+
+        setStores(
+          unwrap(response),
+        );
+      } catch (
+        error: any
+      ) {
+        showToast(
+          getErrorMessage(error),
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setStores(prev => [newStore, ...prev]);
-    showToast(`Loja oficial "${name}" cadastrada com sucesso!`);
-    setIsAddModalOpen(false);
+  useEffect(() => {
+    void loadStores();
+  }, [statusFilter]);
 
-    setName('');
-    setSeller('');
-    setCountry('GW');
-    setCategory('Eletrônicos & Tecnologia');
-  };
+  const filtered =
+    useMemo(() => {
+      if (!search.trim()) {
+        return stores;
+      }
 
-  const toggleHighlight = (store: StoreItem) => {
-    const nextState = !store.highlighted;
-    setStores(prev =>
-      prev.map(s => s.id === store.id ? { ...s, highlighted: nextState, status: nextState ? 'Destacada' : 'Ativa' } : s)
-    );
-    showToast(nextState ? `Loja "${store.name}" adicionada aos destaques da Home.` : `Loja "${store.name}" removida dos destaques.`);
-  };
+      const term =
+        search
+          .trim()
+          .toLowerCase();
 
-  const handleSendWarning = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!warningStore) return;
+      return stores.filter(
+        (store: any) => {
+          const sellerName =
+            [
+              store.seller
+                ?.tradeName,
+              store.seller
+                ?.legalName,
+              store.seller?.user
+                ?.firstName,
+              store.seller?.user
+                ?.lastName,
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
 
-    showToast(`Advertência formal enviada à loja "${warningStore.name}": ${warningReason || 'Violação de termos'}`);
-    setWarningStore(null);
-    setWarningReason('');
-  };
+          return (
+            store.name
+              ?.toLowerCase()
+              .includes(term) ||
+            store.slug
+              ?.toLowerCase()
+              .includes(term) ||
+            sellerName.includes(
+              term,
+            )
+          );
+        },
+      );
+    }, [stores, search]);
+
+  const changeStatus =
+    async (
+      store: StoreReal,
+      status: string,
+    ) => {
+      try {
+        setActionLoading(
+          store.id,
+        );
+
+        const response =
+          await StoresApi.updateAdminStatus(
+            store.id,
+            {
+              status,
+            },
+          );
+
+        if (
+          !response.success
+        ) {
+          throw new Error(
+            response.error
+              ?.message ||
+              'Falha ao atualizar loja.',
+          );
+        }
+
+        showToast(
+          `Status da loja "${store.name}" atualizado.`,
+        );
+
+        await loadStores();
+      } catch (
+        error: any
+      ) {
+        showToast(
+          getErrorMessage(error),
+        );
+      } finally {
+        setActionLoading(
+          null,
+        );
+      }
+    };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-gray-200 p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-black flex items-center gap-2">
             <Building2 className="w-6 h-6 text-purple-600" />
-            Gestão & Moderação de Lojas Oficiais
+            Gestão de Lojas
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Supervisão de lojas parceiras, vitrines em destaque na Home e aplicação de advertências disciplinares.
+            Supervisão real das
+            lojas cadastradas no
+            marketplace.
           </p>
         </div>
 
         <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
+          type="button"
+          onClick={() =>
+            void loadStores()
+          }
+          className="px-4 py-2.5 bg-gray-100 rounded-xl text-xs font-bold flex gap-2 items-center"
         >
-          <Plus className="w-4 h-4" /> Credenciar Nova Loja Oficial
+          <RefreshCw className="w-4 h-4" />
+          Atualizar
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stores.map(s => (
-          <div key={s.id} className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 space-y-4 hover:border-purple-300 transition">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 block">{s.country === 'GW' ? '🇬🇼 Guiné-Bissau' : '🇧🇷 Brasil'}</span>
-                <h3 className="font-extrabold text-sm text-gray-900">{s.name}</h3>
-                <p className="text-xs text-purple-700 font-bold">Por: {s.seller}</p>
-              </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                s.highlighted ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                {s.status}
-              </span>
-            </div>
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
 
-            <div className="space-y-1.5 text-xs bg-gray-50 p-3 rounded-xl">
-              <div className="flex justify-between text-gray-600">
-                <span>Categoria:</span>
-                <strong className="text-gray-900">{s.category}</strong>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Produtos & Avaliação:</span>
-                <strong className="text-gray-900">{s.prods} itens • ⭐ {s.rating}</strong>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Vendas Totais:</span>
-                <strong className="text-emerald-700">{s.sales}</strong>
-              </div>
-            </div>
+          <input
+            value={search}
+            onChange={(
+              event,
+            ) =>
+              setSearch(
+                event.target
+                  .value,
+              )
+            }
+            onKeyDown={(
+              event,
+            ) => {
+              if (
+                event.key ===
+                'Enter'
+              ) {
+                void loadStores();
+              }
+            }}
+            placeholder="Buscar loja, slug ou vendedor..."
+            className="w-full pl-9 pr-3 py-2 border rounded-xl text-xs"
+          />
+        </div>
 
-            <div className="pt-2 flex items-center justify-between text-xs border-t border-gray-100">
-              <button
-                onClick={() => toggleHighlight(s)}
-                className={`font-bold flex items-center gap-1 cursor-pointer ${
-                  s.highlighted ? 'text-amber-600 hover:text-amber-800' : 'text-purple-600 hover:text-purple-800'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" /> {s.highlighted ? 'Remover Destaque' : 'Destacar na Home'}
-              </button>
-              <button
-                onClick={() => { setWarningStore(s); setWarningReason(''); }}
-                className="text-amber-600 hover:text-amber-800 font-bold cursor-pointer"
-              >
-                Advertência
-              </button>
-            </div>
-          </div>
-        ))}
+        <select
+          value={
+            statusFilter
+          }
+          onChange={(
+            event,
+          ) =>
+            setStatusFilter(
+              event.target
+                .value,
+            )
+          }
+          className="border rounded-xl px-3 py-2 text-xs font-bold"
+        >
+          <option value="">
+            Todos os status
+          </option>
+
+          <option value="ACTIVE">
+            Ativas
+          </option>
+
+          <option value="SUSPENDED">
+            Suspensas
+          </option>
+
+          <option value="CLOSED">
+            Fechadas
+          </option>
+        </select>
       </div>
 
-      {/* Modal Credenciar Nova Loja */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-purple-600" /> Credenciar Nova Loja Oficial
-              </h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {loading ? (
+        <div className="bg-white border rounded-2xl p-12 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        </div>
+      ) : !filtered.length ? (
+        <div className="bg-white border rounded-2xl p-12 text-center text-sm text-gray-500">
+          Nenhuma loja encontrada.
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map(
+            (store: any) => {
+              const sellerName =
+                store.seller
+                  ?.tradeName ||
+                store.seller
+                  ?.legalName ||
+                [
+                  store.seller
+                    ?.user
+                    ?.firstName,
+                  store.seller
+                    ?.user
+                    ?.lastName,
+                ]
+                  .filter(Boolean)
+                  .join(' ') ||
+                '—';
 
-            <form onSubmit={handleCreateStore} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome Comercial da Loja:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Guiné Bissau Megastore"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
+              const busy =
+                actionLoading ===
+                store.id;
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Responsável / Proprietário:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Suleimane Embaló"
-                  value={seller}
-                  onChange={e => setSeller(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">País:</label>
-                  <select
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  >
-                    <option value="GW">🇬🇼 Guiné-Bissau</option>
-                    <option value="BR">🇧🇷 Brasil</option>
-                    <option value="PT">🇵🇹 Portugal</option>
-                    <option value="AO">🇦🇴 Angola</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Categoria:</label>
-                  <input
-                    type="text"
-                    required
-                    value={category}
-                    onChange={e => setCategory(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+              return (
+                <div
+                  key={store.id}
+                  className="bg-white border rounded-2xl p-5 space-y-4"
                 >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" /> Criar Loja
-                </button>
-              </div>
-            </form>
-          </div>
+                  <div className="flex justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold">
+                        {store.country
+                          ?.code ||
+                          '—'}
+                      </span>
+
+                      <h3 className="font-black mt-1">
+                        {store.name}
+                      </h3>
+
+                      <p className="text-xs text-purple-700 font-bold mt-1">
+                        {sellerName}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-black px-2 py-1 h-fit rounded-full ${
+                        store.status ===
+                        'ACTIVE'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : store.status ===
+                              'SUSPENDED'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {statusLabel(
+                        store.status,
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">
+                        Slug
+                      </span>
+
+                      <strong>
+                        {store.slug}
+                      </strong>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">
+                        Avaliação
+                      </span>
+
+                      <strong>
+                        {Number(
+                          store.averageRating ||
+                            0,
+                        ).toFixed(
+                          1,
+                        )}
+                      </strong>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">
+                        Oficial
+                      </span>
+
+                      <strong>
+                        {store.isOfficial
+                          ? 'Sim'
+                          : 'Não'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedStore(
+                          store,
+                        )
+                      }
+                      className="px-3 py-2 bg-purple-50 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Detalhes
+                    </button>
+
+                    {store.status !==
+                      'ACTIVE' && (
+                      <button
+                        disabled={
+                          busy
+                        }
+                        type="button"
+                        onClick={() =>
+                          void changeStatus(
+                            store,
+                            'ACTIVE',
+                          )
+                        }
+                        className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold flex gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Ativar
+                      </button>
+                    )}
+
+                    {store.status ===
+                      'ACTIVE' && (
+                      <button
+                        disabled={
+                          busy
+                        }
+                        type="button"
+                        onClick={() =>
+                          void changeStatus(
+                            store,
+                            'SUSPENDED',
+                          )
+                        }
+                        className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold flex gap-1"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        Suspender
+                      </button>
+                    )}
+
+                    {store.status !==
+                      'CLOSED' && (
+                      <button
+                        disabled={
+                          busy
+                        }
+                        type="button"
+                        onClick={() =>
+                          void changeStatus(
+                            store,
+                            'CLOSED',
+                          )
+                        }
+                        className="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex gap-1"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Fechar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            },
+          )}
         </div>
       )}
 
-      {/* Modal Advertência */}
-      {warningStore && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-amber-600" /> Advertência Formal - {warningStore.name}
+      {selectedStore && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <div className="flex justify-between border-b pb-3">
+              <h3 className="font-black flex gap-2">
+                <Store className="w-5 h-5 text-purple-600" />
+                Detalhes da Loja
               </h3>
-              <button onClick={() => setWarningStore(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+
+              <button
+                onClick={() =>
+                  setSelectedStore(
+                    null,
+                  )
+                }
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSendWarning} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Motivo da Advertência Disciplinar:</label>
-                <textarea
-                  rows={3}
-                  required
-                  placeholder="Ex: Atraso recorrente nos despachos para o HUB Bandim Bissau..."
-                  value={warningReason}
-                  onChange={e => setWarningReason(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
+            <div className="mt-4 text-xs space-y-3">
+              <Info
+                label="Nome"
+                value={
+                  selectedStore.name
+                }
+              />
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setWarningStore(null)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl shadow-md"
-                >
-                  Enviar Notificação
-                </button>
-              </div>
-            </form>
+              <Info
+                label="Slug"
+                value={
+                  selectedStore.slug
+                }
+              />
+
+              <Info
+                label="Status"
+                value={statusLabel(
+                  selectedStore.status,
+                )}
+              />
+
+              <Info
+                label="País"
+                value={
+                  selectedStore
+                    .country?.name ||
+                  selectedStore
+                    .country?.code ||
+                  '—'
+                }
+              />
+
+              <Info
+                label="E-mail"
+                value={
+                  selectedStore
+                    .businessEmail ||
+                  '—'
+                }
+              />
+
+              <Info
+                label="Telefone"
+                value={
+                  selectedStore
+                    .businessPhone ||
+                  '—'
+                }
+              />
+
+              <Info
+                label="Cidade"
+                value={
+                  selectedStore.city ||
+                  '—'
+                }
+              />
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+const Info: React.FC<{
+  label: string;
+  value: React.ReactNode;
+}> = ({
+  label,
+  value,
+}) => (
+  <div className="flex justify-between gap-4 border-b pb-2">
+    <span className="text-gray-500">
+      {label}
+    </span>
+
+    <strong className="text-right">
+      {value}
+    </strong>
+  </div>
+);

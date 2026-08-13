@@ -1,210 +1,420 @@
-import React, { useState } from 'react';
-import { Tag, Plus, CheckCircle, ShieldCheck, Edit2, Trash2, X, Check } from 'lucide-react';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
 
-interface AdminBrandsManagerProps {
+import {
+  Check,
+  Edit2,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
+
+import { BrandsApi } from '../../api/clients/BrandsApi';
+
+interface Props {
   showToast: (msg: string) => void;
 }
 
 interface BrandItem {
   id: string;
   name: string;
-  category: string;
-  status: string;
-  prods: number;
+  slug?: string;
+  description?: string | null;
+  status?: string;
+  isActive?: boolean;
+  isVerified?: boolean;
+  productCount?: number;
+  _count?: {
+    products?: number;
+  };
 }
 
-export const AdminBrandsManager: React.FC<AdminBrandsManagerProps> = ({ showToast }) => {
-  const [brands, setBrands] = useState<BrandItem[]>([
-    { id: 'BRD-1', name: 'Nusali Agro', category: 'Maquinaria Agrícola', status: 'Oficial Verificada', prods: 120 },
-    { id: 'BRD-2', name: 'Nusali Solar Tech', category: 'Energia Solar', status: 'Oficial Verificada', prods: 85 },
-    { id: 'BRD-3', name: 'Bissau Mobile', category: 'Smartphones', status: 'Marca Registrada', prods: 42 },
-  ]);
+const unwrap = (response: any): BrandItem[] => {
+  const data = response?.data;
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<BrandItem | null>(null);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
 
-  const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState('');
-  const [formStatus, setFormStatus] = useState('Marca Registrada');
+  return [];
+};
 
-  const handleOpenCreate = () => {
-    setEditingBrand(null);
-    setFormName('');
-    setFormCategory('');
-    setFormStatus('Marca Registrada');
-    setIsModalOpen(true);
+const slugify = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const errorMessage = (error: any) =>
+  error?.response?.data?.message ||
+  error?.response?.data?.error?.message ||
+  error?.message ||
+  'Operação não concluída.';
+
+export const AdminBrandsManager: React.FC<
+  Props
+> = ({ showToast }) => {
+  const [brands, setBrands] =
+    useState<BrandItem[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [modal, setModal] =
+    useState(false);
+
+  const [editing, setEditing] =
+    useState<BrandItem | null>(null);
+
+  const [name, setName] =
+    useState('');
+
+  const [description, setDescription] =
+    useState('');
+
+  const [active, setActive] =
+    useState(true);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+
+      const response =
+        await BrandsApi.listAdmin();
+
+      setBrands(unwrap(response));
+    } catch (error: any) {
+      showToast(errorMessage(error));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOpenEdit = (b: BrandItem) => {
-    setEditingBrand(b);
-    setFormName(b.name);
-    setFormCategory(b.category);
-    setFormStatus(b.status);
-    setIsModalOpen(true);
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const openCreate = () => {
+    setEditing(null);
+    setName('');
+    setDescription('');
+    setActive(true);
+    setModal(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim() || !formCategory.trim()) {
-      showToast('Por favor, preencha todos os campos da marca.');
+  const openEdit = (
+    brand: BrandItem,
+  ) => {
+    setEditing(brand);
+    setName(brand.name);
+    setDescription(
+      brand.description || '',
+    );
+    setActive(
+      brand.isActive ??
+        brand.status !== 'INACTIVE',
+    );
+    setModal(true);
+  };
+
+  const save = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!name.trim()) {
+      showToast(
+        'Informe o nome da marca.',
+      );
       return;
     }
 
-    if (editingBrand) {
-      setBrands(prev =>
-        prev.map(b =>
-          b.id === editingBrand.id
-            ? { ...b, name: formName, category: formCategory, status: formStatus }
-            : b
-        )
-      );
-      showToast(`Marca "${formName}" atualizada com sucesso!`);
-    } else {
-      const newBrand: BrandItem = {
-        id: `BRD-${Date.now().toString().slice(-4)}`,
-        name: formName,
-        category: formCategory,
-        status: formStatus,
-        prods: 0
-      };
-      setBrands(prev => [...prev, newBrand]);
-      showToast(`Nova marca "${formName}" registrada com sucesso!`);
-    }
+    const payload = {
+      name: name.trim(),
+      slug:
+        editing?.slug ||
+        slugify(name),
+      description:
+        description.trim() ||
+        undefined,
+      isActive: active,
+    };
 
-    setIsModalOpen(false);
+    try {
+      setSaving(true);
+
+      if (editing) {
+        await BrandsApi.update(
+          editing.id,
+          payload,
+        );
+
+        showToast(
+          'Marca atualizada com sucesso.',
+        );
+      } else {
+        await BrandsApi.create(
+          payload,
+        );
+
+        showToast(
+          'Marca cadastrada com sucesso.',
+        );
+      }
+
+      setModal(false);
+      await load();
+    } catch (error: any) {
+      showToast(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string, name: string) => {
-    if (confirm(`Deseja realmente remover a marca "${name}"?`)) {
-      setBrands(prev => prev.filter(b => b.id !== id));
-      showToast(`Marca "${name}" removida com sucesso.`);
+  const remove = async (
+    brand: BrandItem,
+  ) => {
+    if (
+      !window.confirm(
+        `Remover a marca "${brand.name}"?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await BrandsApi.delete(brand.id);
+
+      showToast('Marca removida.');
+      await load();
+    } catch (error: any) {
+      showToast(errorMessage(error));
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-6 border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-black flex items-center gap-2">
             <Tag className="w-6 h-6 text-purple-600" />
-            Gestão de Marcas & Registro Oficial
+            Gestão de Marcas
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Cadastro e verificação de marcas autorizadas no marketplace.
+            Cadastro real de marcas
+            utilizadas pelo catálogo.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreate}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Registrar Nova Marca
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="px-4 py-2.5 bg-gray-100 rounded-xl text-xs font-bold flex gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
+
+          <button
+            type="button"
+            onClick={openCreate}
+            className="px-4 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-extrabold flex gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Registrar Marca
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {brands.map(b => (
-          <div key={b.id} className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 space-y-3 relative group">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-extrabold text-sm text-gray-900">{b.name}</h3>
-                <span className="text-xs text-gray-500">{b.category}</span>
-              </div>
-              <span className="bg-purple-50 text-purple-700 text-[10px] font-black px-2 py-0.5 rounded">
-                {b.status}
-              </span>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-              <span className="text-xs font-bold text-gray-700">{b.prods} produtos vinculados</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleOpenEdit(b)}
-                  className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg cursor-pointer"
-                  title="Editar Marca"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(b.id, b.name)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
-                  title="Excluir Marca"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <div className="bg-white border rounded-2xl p-12 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-3 gap-5">
+          {brands.map((brand) => {
+            const productCount =
+              brand._count?.products ??
+              brand.productCount ??
+              0;
 
-      {/* Modal Cadastrar / Editar Marca */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Tag className="w-5 h-5 text-purple-600" />
-                {editingBrand ? 'Editar Marca' : 'Registrar Nova Marca'}
+            const enabled =
+              brand.isActive ??
+              brand.status !== 'INACTIVE';
+
+            return (
+              <div
+                key={brand.id}
+                className="bg-white rounded-2xl border p-5 space-y-4"
+              >
+                <div>
+                  <div className="flex justify-between gap-2">
+                    <h3 className="font-extrabold">
+                      {brand.name}
+                    </h3>
+
+                    <span
+                      className={`text-[10px] px-2 py-1 rounded-full font-black ${
+                        enabled
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {enabled
+                        ? 'ATIVA'
+                        : 'INATIVA'}
+                    </span>
+                  </div>
+
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    {brand.slug || '—'}
+                  </p>
+
+                  {brand.description && (
+                    <p className="text-xs text-gray-500 mt-3">
+                      {brand.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="border-t pt-3 flex justify-between items-center">
+                  <span className="text-xs font-bold text-gray-600">
+                    {productCount} produto(s)
+                  </span>
+
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openEdit(brand)
+                      }
+                      className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void remove(brand)
+                      }
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <div className="flex justify-between border-b pb-3">
+              <h3 className="font-black">
+                {editing
+                  ? 'Editar Marca'
+                  : 'Registrar Marca'}
               </h3>
+
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+                type="button"
+                onClick={() =>
+                  setModal(false)
+                }
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <form
+              onSubmit={save}
+              className="space-y-4 mt-4 text-xs"
+            >
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome da Marca:</label>
+                <label className="font-bold block mb-1">
+                  Nome
+                </label>
+
                 <input
-                  type="text"
+                  value={name}
                   required
-                  placeholder="Ex: Bissau Tech"
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
+                  onChange={(event) =>
+                    setName(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full p-2.5 border rounded-xl"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Categoria Principal:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Eletrônicos & Telefonia"
-                  value={formCategory}
-                  onChange={e => setFormCategory(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
+                <label className="font-bold block mb-1">
+                  Descrição
+                </label>
+
+                <textarea
+                  value={description}
+                  onChange={(event) =>
+                    setDescription(
+                      event.target.value,
+                    )
+                  }
+                  className="w-full p-2.5 border rounded-xl min-h-[90px]"
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Status do Registro:</label>
-                <select
-                  value={formStatus}
-                  onChange={e => setFormStatus(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 font-bold"
-                >
-                  <option value="Oficial Verificada">Oficial Verificada</option>
-                  <option value="Marca Registrada">Marca Registrada</option>
-                  <option value="Em Análise">Em Análise</option>
-                </select>
-              </div>
+              <label className="flex gap-2 items-center font-bold">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(event) =>
+                    setActive(
+                      event.target.checked,
+                    )
+                  }
+                />
+                Marca ativa
+              </label>
 
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="flex justify-end gap-2 border-t pt-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+                  onClick={() =>
+                    setModal(false)
+                  }
+                  className="px-4 py-2 border rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
+                  disabled={saving}
+                  className="px-5 py-2 bg-purple-600 text-white rounded-xl font-black flex gap-2 items-center disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" /> Salvar Marca
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Salvar
                 </button>
               </div>
             </form>

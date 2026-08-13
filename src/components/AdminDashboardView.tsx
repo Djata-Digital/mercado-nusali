@@ -1,6 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminKycReview } from './admin/AdminKycReview';
+import { AdminCategoriesManager } from './admin/AdminCategoriesManager';
+import { AdminBrandsManager } from './admin/AdminBrandsManager';
+import { AdminOrdersManager } from './admin/AdminOrdersManager';
+import { AdminStoresManager } from './admin/AdminStoresManager';
+import { AdminWarehousesManager } from './admin/AdminWarehousesManager';
 import {
   CheckCircle2,
   Clock3,
@@ -11,9 +16,11 @@ import {
   RefreshCw,
   ShieldCheck,
   Store,
+  Truck,
   XCircle,
 } from 'lucide-react';
 import { FulfillmentCoreView } from './admin/FulfillmentCoreView';
+import { AdminLogisticsDashboard } from './admin/AdminLogisticsDashboard';
 import {
   AdminAuditApi,
   AdminKycApi,
@@ -21,7 +28,18 @@ import {
   AdminSellersApi,
 } from '../api/clients/AdminCoreApi';
 
-type Tab = 'overview' | 'products' | 'kyc' | 'fulfillment' | 'audit';
+type Tab =
+  | 'overview'
+  | 'products'
+  | 'kyc'
+  | 'fulfillment'
+  | 'logistics'
+  | 'audit'
+  | 'categories'
+  | 'brands'
+  | 'stores'
+  | 'orders'
+  | 'warehouses';
 
 const date = (value?: string | null) =>
   value
@@ -191,12 +209,66 @@ export const AdminDashboardView: React.FC = () => {
     );
   }
 
-  const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
-    { id: 'overview', label: 'Resumo', icon: <ShieldCheck className="w-4 h-4" /> },
-    { id: 'products', label: 'Produtos', icon: <PackageCheck className="w-4 h-4" /> },
-    { id: 'kyc', label: 'KYC & Vendedores', icon: <FileCheck2 className="w-4 h-4" /> },
-    { id: 'fulfillment', label: 'Fulfillment', icon: <PackageCheck className="w-4 h-4" /> },
-    { id: 'audit', label: 'Auditoria', icon: <History className="w-4 h-4" /> },
+  const tabs: Array<{
+    id: Tab;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      id: 'overview',
+      label: 'Resumo',
+      icon: <ShieldCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'kyc',
+      label: 'KYC & Vendedores',
+      icon: <FileCheck2 className="w-4 h-4" />,
+    },
+    {
+      id: 'stores',
+      label: 'Lojas',
+      icon: <Store className="w-4 h-4" />,
+    },
+    {
+      id: 'products',
+      label: 'Produtos',
+      icon: <PackageCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'categories',
+      label: 'Categorias',
+      icon: <PackageCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'brands',
+      label: 'Marcas',
+      icon: <Store className="w-4 h-4" />,
+    },
+    {
+      id: 'orders',
+      label: 'Pedidos',
+      icon: <PackageCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'warehouses',
+      label: 'Armazéns',
+      icon: <PackageCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'fulfillment',
+      label: 'Fulfillment',
+      icon: <PackageCheck className="w-4 h-4" />,
+    },
+    {
+      id: 'logistics',
+      label: 'Logística',
+      icon: <Truck className="w-4 h-4" />,
+    },
+    {
+      id: 'audit',
+      label: 'Auditoria',
+      icon: <History className="w-4 h-4" />,
+    },
   ];
 
   return (
@@ -328,6 +400,42 @@ export const AdminDashboardView: React.FC = () => {
 
       {tab === 'fulfillment' && (
         <FulfillmentCoreView showToast={setMessage} />
+      )}
+
+      {tab === 'logistics' && (
+        <AdminLogisticsDashboard
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'categories' && (
+        <AdminCategoriesManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'brands' && (
+        <AdminBrandsManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'stores' && (
+        <AdminStoresManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'orders' && (
+        <AdminOrdersManager
+          showToast={setMessage}
+        />
+      )}
+
+      {tab === 'warehouses' && (
+        <AdminWarehousesManager
+          showToast={setMessage}
+        />
       )}
 
       {tab === 'audit' && (

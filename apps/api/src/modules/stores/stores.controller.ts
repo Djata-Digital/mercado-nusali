@@ -136,6 +136,23 @@ export class StoresController {
   }
 
   // Admin Routes
+
+  @Get('admin/stores')
+  @ApiBearerAuth()
+  @Roles('ADMIN', 'GLOBAL_ADMIN', 'MODERATOR')
+  @ApiOperation({
+    summary:
+      'Listar todas as lojas para administração/moderação',
+  })
+  async listAdminStores(
+    @Query() query: any,
+  ) {
+    return this.storesService.listAdminStores(
+      query,
+    );
+  }
+
+  
   @Patch('admin/stores/:id/status')
   @ApiBearerAuth()
   @Roles('ADMIN', 'GLOBAL_ADMIN', 'MODERATOR')

@@ -356,6 +356,137 @@ export class StoresService {
   }
 
   // Admin Endpoints
+
+  async listAdminStores(query: any) {
+    const page = Math.max(
+      Number(query.page) || 1,
+      1,
+    );
+
+    const limit = Math.min(
+      Math.max(
+        Number(query.limit) || 20,
+        1,
+      ),
+      100,
+    );
+
+    const skip =
+      (page - 1) * limit;
+
+    const where: any = {
+      deletedAt: null,
+    };
+
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    if (query.countryId) {
+      where.countryId =
+        query.countryId;
+    }
+
+    if (query.sellerId) {
+      where.sellerId =
+        query.sellerId;
+    }
+
+    if (query.search) {
+      const search =
+        String(query.search).trim();
+
+      if (search) {
+        where.OR = [
+          {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            slug: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            businessEmail: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            seller: {
+              is: {
+                OR: [
+                  {
+                    legalName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
+                  },
+                  {
+                    tradeName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ];
+      }
+    }
+
+    const [items, total] =
+      await Promise.all([
+        this.prisma.store.findMany({
+          where,
+          skip,
+          take: limit,
+
+          orderBy: {
+            createdAt: 'desc',
+          },
+
+          include: {
+            country: true,
+
+            seller: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+
+        this.prisma.store.count({
+          where,
+        }),
+      ]);
+
+    return buildPaginatedResponse(
+      items.map((store) =>
+        this.mapStorePublicUrls(
+          store,
+        ),
+      ),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  
   async updateStoreStatus(adminUserId: string, storeId: string, status: StoreStatus, reqInfo: any) {
     const store = await this.prisma.store.findUnique({
       where: { id: storeId },

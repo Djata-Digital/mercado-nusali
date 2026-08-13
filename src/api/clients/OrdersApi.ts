@@ -134,5 +134,40 @@ export class OrdersApi {
     });
   }
 
+  // ============================================================
+  // ADMIN
+  // ============================================================
+
+  static listAdmin(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    storeId?: string;
+  }): Promise<ApiResponse<any>> {
+    return apiClient.get('/orders/admin', {
+      params,
+    });
+  }
+
+  static getAdminById(
+    id: string,
+  ): Promise<ApiResponse<BuyerOrder>> {
+    return apiClient.get(`/orders/${id}`);
+  }
+
+  static updateStatusAdmin(
+    id: string,
+    data: {
+      status: string;
+      reason?: string;
+    },
+  ): Promise<ApiResponse<any>> {
+    return apiClient.patch(
+      `/orders/${id}/status`,
+      data,
+    );
+  }
+
 
 }

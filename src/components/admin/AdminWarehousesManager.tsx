@@ -1,306 +1,600 @@
-import React, { useState } from 'react';
-import { Warehouse, Plus, Settings, AlertTriangle, CheckCircle, Package, X, Check, Eye } from 'lucide-react';
-import { mockWarehousesList, WarehouseRecord } from '../../data/mockAdminWarehouses';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
 
-interface AdminWarehousesManagerProps {
-  showToast: (msg: string) => void;
+import {
+  CheckCircle2,
+  Loader2,
+  Package,
+  Plus,
+  RefreshCw,
+  Warehouse,
+  X,
+} from 'lucide-react';
+
+import { WarehouseApi } from '../../api/clients/WarehouseApi';
+
+interface Props {
+  showToast: (
+    message: string,
+  ) => void;
 }
 
-export const AdminWarehousesManager: React.FC<AdminWarehousesManagerProps> = ({ showToast }) => {
-  const [warehouses, setWarehouses] = useState<WarehouseRecord[]>(mockWarehousesList);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedAuditHub, setSelectedAuditHub] = useState<WarehouseRecord | null>(null);
+const unwrap = (
+  response: any,
+): any[] => {
+  const data = response?.data;
 
-  // Form states for new HUB
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [country, setCountry] = useState('GW');
-  const [address, setAddress] = useState('');
-  const [managerName, setManagerName] = useState('');
-  const [totalCapacity, setTotalCapacity] = useState('50000');
+  if (Array.isArray(data)) {
+    return data;
+  }
 
-  const handleAddHub = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!code.trim() || !name.trim()) {
-      showToast('Por favor, informe o código e o nome do HUB.');
-      return;
-    }
+  if (Array.isArray(data?.items)) {
+    return data.items;
+  }
 
-    const newHub: WarehouseRecord = {
-      id: `WH-${Date.now().toString().slice(-4)}`,
-      code: code.toUpperCase(),
-      name,
-      country,
-      city: 'Bissau',
-      status: 'active',
-      monthlyOperatingCostFormatted: '2.500.000 XOF',
-      address: address || 'Endereço Principal do HUB',
-      managerName: managerName || 'Gerente Operacional',
-      staffCount: 10,
-      capacityUsedPercentage: 15,
-      totalCapacityPackages: parseInt(totalCapacity) || 50000,
-      activeShipments: 0,
-      dailyInboundPackages: 0,
-      dailyOutboundPackages: 0
+  return [];
+};
+
+const errorMessage = (
+  error: any,
+) =>
+  error?.response?.data?.error
+    ?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  'Não foi possível concluir a operação.';
+
+export const AdminWarehousesManager:
+React.FC<Props> = ({
+  showToast,
+}) => {
+  const [
+    warehouses,
+    setWarehouses,
+  ] = useState<any[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [modal, setModal] =
+    useState(false);
+
+  const [name, setName] =
+    useState('');
+
+  const [code, setCode] =
+    useState('');
+
+  const [
+    countryCode,
+    setCountryCode,
+  ] = useState('GW');
+
+  const [city, setCity] =
+    useState('');
+
+  const [
+    addressLine1,
+    setAddressLine1,
+  ] = useState('');
+
+  const [
+    capacity,
+    setCapacity,
+  ] = useState('0');
+
+  const [
+    warehouseType,
+    setWarehouseType,
+  ] = useState('PLATFORM_HUB');
+
+  const load =
+    async () => {
+      try {
+        setLoading(true);
+
+        const response =
+          await WarehouseApi.listAdmin(
+            {
+              page: 1,
+              limit: 100,
+            },
+          );
+
+        setWarehouses(
+          unwrap(response),
+        );
+      } catch (
+        error: any
+      ) {
+        showToast(
+          errorMessage(error),
+        );
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setWarehouses(prev => [newHub, ...prev]);
-    showToast(`Novo HUB Logístico "${name}" (${code.toUpperCase()}) cadastrado com sucesso!`);
-    setIsAddModalOpen(false);
+  useEffect(() => {
+    void load();
+  }, []);
 
-    // Reset
-    setCode('');
-    setName('');
-    setCountry('GW');
-    setAddress('');
-    setManagerName('');
-    setTotalCapacity('50000');
-  };
+  const create =
+    async (
+      event:
+        React.FormEvent,
+    ) => {
+      event.preventDefault();
 
-  const handleRunAudit = (hub: WarehouseRecord) => {
-    setWarehouses(prev =>
-      prev.map(w => w.id === hub.id ? { ...w, capacityUsedPercentage: Math.max(10, w.capacityUsedPercentage - 2) } : w)
-    );
-    showToast(`Auditoria de inventário do HUB ${hub.code} concluída! Divergências sincronizadas.`);
-    setSelectedAuditHub(null);
-  };
+      if (
+        !name.trim() ||
+        !code.trim()
+      ) {
+        showToast(
+          'Informe nome e código do armazém.',
+        );
+        return;
+      }
+
+      try {
+        setSaving(true);
+
+        await WarehouseApi.create(
+          {
+            name:
+              name.trim(),
+
+            code:
+              code
+                .trim()
+                .toUpperCase(),
+
+            countryCode,
+
+            type:
+              warehouseType,
+
+            city:
+              city.trim() ||
+              undefined,
+
+            addressLine1:
+              addressLine1.trim() ||
+              undefined,
+
+            capacity:
+              Number(
+                capacity,
+              ) || 0,
+          },
+        );
+
+        showToast(
+          'Armazém/HUB criado com sucesso.',
+        );
+
+        setModal(false);
+
+        setName('');
+        setCode('');
+        setCity('');
+        setAddressLine1('');
+        setCapacity('0');
+
+        await load();
+      } catch (
+        error: any
+      ) {
+        showToast(
+          errorMessage(error),
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  const changeStatus =
+    async (
+      warehouse: any,
+      status: string,
+    ) => {
+      try {
+        await WarehouseApi.updateAdminStatus(
+          warehouse.id,
+          {
+            status,
+          },
+        );
+
+        showToast(
+          `Status do armazém ${warehouse.code} atualizado.`,
+        );
+
+        await load();
+      } catch (
+        error: any
+      ) {
+        showToast(
+          errorMessage(error),
+        );
+      }
+    };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border rounded-2xl p-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-black flex items-center gap-2">
             <Warehouse className="w-6 h-6 text-purple-600" />
-            Centros de Distribuição & HUBs Logísticos
+            Armazéns & HUBs
           </h1>
+
           <p className="text-xs text-gray-500 mt-1">
-            Gestão de inventário e capacidade operacional dos HUBs em Bissau (Bandim), Lisboa, São Paulo e Luanda.
+            Gestão real da
+            infraestrutura de
+            armazenagem do
+            marketplace.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Cadastrar Novo HUB
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() =>
+              void load()
+            }
+            className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold flex gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </button>
+
+          <button
+            onClick={() =>
+              setModal(true)
+            }
+            className="px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-black flex gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Novo HUB
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {warehouses.map(w => (
-          <div key={w.id} className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4 hover:border-purple-300 transition">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 block font-mono">{w.code} ({w.country})</span>
-                <h3 className="font-extrabold text-base text-gray-900">{w.name}</h3>
-                <p className="text-xs text-purple-700 font-bold">{w.address}</p>
-              </div>
-
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-full">
-                OPERACIONAL
-              </span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between text-gray-600">
-                <span>Gerente Operacional:</span>
-                <strong className="text-gray-900">{w.managerName} ({w.staffCount} colaboradores)</strong>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Ocupação do Armazém:</span>
-                <strong className="text-purple-700 font-black">{w.capacityUsedPercentage}% de {w.totalCapacityPackages.toLocaleString()} pacotes</strong>
-              </div>
-              <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
-                <div className="bg-purple-600 h-full rounded-full" style={{ width: `${w.capacityUsedPercentage}%` }} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 bg-gray-50 p-3 rounded-xl text-xs text-center border border-gray-100">
-              <div>
-                <span className="text-[10px] text-gray-400 block font-bold">Ativos</span>
-                <span className="font-extrabold text-gray-900">{w.activeShipments}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-gray-400 block font-bold">Entrada/Dia</span>
-                <span className="font-extrabold text-emerald-700">+{w.dailyInboundPackages}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-gray-400 block font-bold">Saída/Dia</span>
-                <span className="font-extrabold text-purple-700">-{w.dailyOutboundPackages}</span>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-              <button
-                onClick={() => setSelectedAuditHub(w)}
-                className="text-purple-600 hover:text-purple-800 font-bold text-xs cursor-pointer"
+      {loading ? (
+        <div className="bg-white border rounded-2xl p-12 flex justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        </div>
+      ) : !warehouses.length ? (
+        <div className="bg-white border rounded-2xl p-12 text-center text-gray-500">
+          Nenhum armazém
+          cadastrado.
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-5">
+          {warehouses.map(
+            (warehouse) => (
+              <div
+                key={
+                  warehouse.id
+                }
+                className="bg-white border rounded-2xl p-5 space-y-4"
               >
-                Auditar Inventário
-              </button>
-              <button
-                onClick={() => showToast(`Escala de equipes do HUB ${w.code} ajustada (${w.staffCount} colaboradores).`)}
-                className="text-gray-600 hover:text-gray-900 font-bold text-xs cursor-pointer"
-              >
-                Gerenciar Equipe
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+                <div className="flex justify-between">
+                  <div>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {warehouse.code}
+                    </span>
 
-      {/* Modal Add HUB */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4 animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Warehouse className="w-5 h-5 text-purple-600" /> Cadastrar Novo HUB Logístico
+                    <h3 className="font-black mt-1">
+                      {warehouse.name}
+                    </h3>
+
+                    <p className="text-xs text-purple-700 font-bold mt-1">
+                      {warehouse
+                        .country
+                        ?.name ||
+                        warehouse
+                          .country
+                          ?.code ||
+                        '—'}
+                    </p>
+                  </div>
+
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full h-fit font-black">
+                    {
+                      warehouse.status
+                    }
+                  </span>
+                </div>
+
+                <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-2">
+                  <Info
+                    label="Tipo"
+                    value={
+                      warehouse.type ||
+                      '—'
+                    }
+                  />
+
+                  <Info
+                    label="Cidade"
+                    value={
+                      warehouse.city ||
+                      '—'
+                    }
+                  />
+
+                  <Info
+                    label="Capacidade"
+                    value={
+                      warehouse.capacity ??
+                      0
+                    }
+                  />
+
+                  <Info
+                    label="Vendedor"
+                    value={
+                      warehouse
+                        .seller
+                        ?.tradeName ||
+                      warehouse
+                        .seller
+                        ?.legalName ||
+                      'Plataforma'
+                    }
+                  />
+                </div>
+
+                <div className="flex gap-2 border-t pt-3">
+                  {warehouse.status !==
+                    'ACTIVE' && (
+                    <button
+                      onClick={() =>
+                        void changeStatus(
+                          warehouse,
+                          'ACTIVE',
+                        )
+                      }
+                      className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold flex gap-1"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Ativar
+                    </button>
+                  )}
+
+                  {warehouse.status ===
+                    'ACTIVE' && (
+                    <button
+                      onClick={() =>
+                        void changeStatus(
+                          warehouse,
+                          'INACTIVE',
+                        )
+                      }
+                      className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold"
+                    >
+                      Desativar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-lg w-full rounded-2xl p-6">
+            <div className="flex justify-between border-b pb-3">
+              <h3 className="font-black flex gap-2">
+                <Package className="w-5 h-5 text-purple-600" />
+                Cadastrar HUB
               </h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+
+              <button
+                onClick={() =>
+                  setModal(false)
+                }
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddHub} className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Código do HUB:</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: HUB-BAF"
-                    value={code}
-                    onChange={e => setCode(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold uppercase"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">País:</label>
-                  <select
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  >
-                    <option value="GW">🇬🇼 Guiné-Bissau</option>
-                    <option value="BR">🇧🇷 Brasil</option>
-                    <option value="PT">🇵🇹 Portugal</option>
-                    <option value="AO">🇦🇴 Angola</option>
-                  </select>
-                </div>
+            <form
+              onSubmit={create}
+              className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-xs"
+            >
+              <Field
+                label="Nome"
+                value={name}
+                onChange={
+                  setName
+                }
+              />
+
+              <Field
+                label="Código"
+                value={code}
+                onChange={
+                  setCode
+                }
+              />
+
+              <div>
+                <label className="font-bold block mb-1">
+                  País
+                </label>
+
+                <select
+                  value={
+                    countryCode
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setCountryCode(
+                      event.target
+                        .value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5"
+                >
+                  <option value="GW">
+                    Guiné-Bissau
+                  </option>
+                  <option value="BR">
+                    Brasil
+                  </option>
+                  <option value="PT">
+                    Portugal
+                  </option>
+                  <option value="AO">
+                    Angola
+                  </option>
+                </select>
               </div>
 
               <div>
-                <label className="block font-bold text-gray-700 mb-1">Nome do Centro de Distribuição:</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: HUB Bafatá Central"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
+                <label className="font-bold block mb-1">
+                  Tipo
+                </label>
+
+                <select
+                  value={
+                    warehouseType
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setWarehouseType(
+                      event.target
+                        .value,
+                    )
+                  }
+                  className="w-full border rounded-xl p-2.5"
+                >
+                  <option value="PLATFORM_HUB">
+                    HUB da Plataforma
+                  </option>
+
+                  <option value="TRANSIT_HUB">
+                    HUB de Trânsito
+                  </option>
+
+                  <option value="PARTNER_WAREHOUSE">
+                    Armazém Parceiro
+                  </option>
+                </select>
+              </div>
+
+              <Field
+                label="Cidade"
+                value={city}
+                onChange={
+                  setCity
+                }
+              />
+
+              <Field
+                label="Capacidade"
+                value={capacity}
+                onChange={
+                  setCapacity
+                }
+              />
+
+              <div className="md:col-span-2">
+                <Field
+                  label="Endereço"
+                  value={
+                    addressLine1
+                  }
+                  onChange={
+                    setAddressLine1
+                  }
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Endereço Físico:</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Bairro Comercial, Bafatá"
-                  value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Gerente Operacional:</label>
-                  <input
-                    type="text"
-                    placeholder="Nome do responsável"
-                    value={managerName}
-                    onChange={e => setManagerName(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-gray-700 mb-1">Capacidade (Pacotes):</label>
-                  <input
-                    type="number"
-                    placeholder="50000"
-                    value={totalCapacity}
-                    onChange={e => setTotalCapacity(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 rounded-xl font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
+              <div className="md:col-span-2 flex justify-end gap-2 border-t pt-4">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 border border-gray-300 font-bold text-gray-700 rounded-xl hover:bg-gray-50"
+                  onClick={() =>
+                    setModal(false)
+                  }
+                  className="px-4 py-2 border rounded-xl font-bold"
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md flex items-center gap-1.5"
+                  disabled={
+                    saving
+                  }
+                  className="px-5 py-2 bg-purple-600 text-white rounded-xl font-black disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" /> Cadastrar HUB
+                  {saving
+                    ? 'Salvando...'
+                    : 'Cadastrar'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      {/* Modal Auditar Inventário */}
-      {selectedAuditHub && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="font-black text-base text-gray-900 flex items-center gap-2">
-                <Package className="w-5 h-5 text-purple-600" /> Auditoria de Inventário - {selectedAuditHub.code}
-              </h3>
-              <button onClick={() => setSelectedAuditHub(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="bg-purple-50 p-4 rounded-xl space-y-1">
-                <p className="font-extrabold text-sm text-purple-900">{selectedAuditHub.name}</p>
-                <p className="text-purple-700 font-bold">{selectedAuditHub.address}</p>
-              </div>
-
-              <div className="space-y-2">
-                <p className="font-bold text-gray-700">Status do Armazém:</p>
-                <ul className="list-disc list-inside text-gray-600 space-y-1">
-                  <li>Ocupação Atual: <strong>{selectedAuditHub.capacityUsedPercentage}%</strong></li>
-                  <li>Capacidade Máxima: <strong>{selectedAuditHub.totalCapacityPackages.toLocaleString()} pacotes</strong></li>
-                  <li>Envios em Trânsito: <strong>{selectedAuditHub.activeShipments} itens</strong></li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-              <button
-                onClick={() => setSelectedAuditHub(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => handleRunAudit(selectedAuditHub)}
-                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl shadow-md"
-              >
-                Executar Auditoria RFID
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
+
+const Info: React.FC<{
+  label: string;
+  value: React.ReactNode;
+}> = ({
+  label,
+  value,
+}) => (
+  <div className="flex justify-between">
+    <span className="text-gray-500">
+      {label}
+    </span>
+
+    <strong>
+      {value}
+    </strong>
+  </div>
+);
+
+const Field: React.FC<{
+  label: string;
+  value: string;
+  onChange: (
+    value: string,
+  ) => void;
+}> = ({
+  label,
+  value,
+  onChange,
+}) => (
+  <div>
+    <label className="font-bold block mb-1">
+      {label}
+    </label>
+
+    <input
+      value={value}
+      onChange={(event) =>
+        onChange(
+          event.target.value,
+        )
+      }
+      className="w-full border rounded-xl p-2.5"
+    />
+  </div>
+);
