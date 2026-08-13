@@ -422,7 +422,7 @@ export class EscrowService {
     return txPrisma ? operation(txPrisma) : this.escrowTransaction.run(operation);
   }
 
-  async openDispute(orderId: string, actorUserId?: string | null) {
+  async openDispute( orderId: string, actorUserId?: string | null, reason?: string,) {
     return this.escrowTransaction.run(async (tx) => {
       const escrow = await tx.escrowAccount.findUnique({ where: { orderId }, include: { order: true } });
       if (!escrow) throw new NotFoundException('Conta de Escrow não encontrada.');
@@ -431,13 +431,107 @@ export class EscrowService {
 
       const claimed = await tx.order.updateMany({ where: { id: orderId, status: escrow.order.status }, data: { status: OrderStatus.DISPUTED } });
       if (claimed.count !== 1) throw new ConflictException({ statusCode: 409, message: 'O pedido foi alterado concorrentemente.', errorCode: 'ESCROW_CONCURRENT_MODIFICATION' });
-      await tx.orderStatusHistory.create({ data: { orderId, previousStatus: escrow.order.status, newStatus: OrderStatus.DISPUTED, reason: 'Disputa de Escrow aberta', changedById: actorUserId || undefined } });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+
+          previousStatus:
+            escrow.order.status,
+
+          newStatus:
+            OrderStatus.DISPUTED,
+
+          reason:
+            reason?.trim() ||
+            'Disputa de Escrow aberta',
+
+          changedById:
+            actorUserId ||
+            undefined,
+
+          metadataJson: {
+            type:
+              'ESCROW_DISPUTE_OPENED',
+          },
+        },
+      });
+
+      if (reason?.trim()) {
+        await tx.orderComment.create({
+          data: {
+            orderId,
+
+            authorId:
+              actorUserId ||
+              undefined,
+
+            comment:
+              reason.trim(),
+
+            isPrivate: false,
+
+            metadataJson: {
+              type:
+                'DISPUTE_OPENING_REASON',
+            },
+          },
+        });
+      }
+
+      await tx.orderTimeline.create({
+        data: {
+          orderId,
+
+          eventCode:
+            'DISPUTE_OPENED',
+
+          title:
+            'Disputa aberta',
+
+          description:
+            reason?.trim() ||
+            'Disputa de Escrow aberta.',
+
+          actorId:
+            actorUserId ||
+            undefined,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId:
+            actorUserId ||
+            undefined,
+
+          action:
+            'ESCROW_DISPUTE_OPENED',
+
+          entity:
+            'Order',
+
+          entityId:
+            orderId,
+
+          newValue: {
+            reason:
+              reason?.trim() ||
+              null,
+
+            previousStatus:
+              escrow.order.status,
+
+            newStatus:
+              OrderStatus.DISPUTED,
+          },
+        },
+      });
       await this.events.recordDisputeOpened(tx, escrow.id, { escrowAccountId: escrow.id, orderId, previousOrderStatus: escrow.order.status });
       return tx.escrowAccount.findUniqueOrThrow({ where: { id: escrow.id } });
     });
   }
 
-  async resolveDispute(orderId: string, outcome: EscrowDisputeOutcome, actorUserId?: string | null) {
+  async resolveDispute( orderId: string, outcome: EscrowDisputeOutcome, actorUserId?: string | null, note?: string,) {
     return this.escrowTransaction.run(async (tx) => {
       const escrow = await tx.escrowAccount.findUnique({ where: { orderId }, include: { order: true } });
       if (!escrow) throw new NotFoundException('Conta de Escrow não encontrada.');
@@ -456,9 +550,512 @@ export class EscrowService {
       const changed = await tx.order.updateMany({ where: { id: orderId, status: OrderStatus.DISPUTED }, data: { status: finalOrderStatus } });
       if (changed.count !== 1) throw new ConflictException({ statusCode: 409, message: 'A resolução da disputa perdeu a concorrência.', errorCode: 'ESCROW_CONCURRENT_MODIFICATION' });
       await tx.orderStatusHistory.create({ data: { orderId, previousStatus: OrderStatus.DISPUTED, newStatus: finalOrderStatus, reason: `Disputa resolvida: ${outcome}`, changedById: actorUserId || undefined } });
+      if (note?.trim()) {
+        await tx.orderComment.create({
+          data: {
+            orderId,
+
+            authorId:
+              actorUserId ||
+              undefined,
+
+            comment:
+              note.trim(),
+
+            isPrivate: false,
+
+            metadataJson: {
+              type:
+                'DISPUTE_RESOLUTION_NOTE',
+
+              outcome,
+            },
+          },
+        });
+      }
+
+      await tx.orderTimeline.create({
+        data: {
+          orderId,
+
+          eventCode:
+            'DISPUTE_RESOLVED',
+
+          title:
+            outcome ===
+            'BUYER_WINS'
+              ? 'Disputa resolvida a favor do comprador'
+              : 'Disputa resolvida a favor do vendedor',
+
+          description:
+            note?.trim() ||
+            (outcome ===
+            'BUYER_WINS'
+              ? 'Saldo retido encaminhado ao fluxo real de reembolso.'
+              : 'Saldo retido liberado ao vendedor.'),
+
+          actorId:
+            actorUserId ||
+            undefined,
+
+          metadataJson: {
+            outcome,
+            finalOrderStatus,
+          },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId:
+            actorUserId ||
+            undefined,
+
+          action:
+            'ESCROW_DISPUTE_RESOLVED',
+
+          entity:
+            'Order',
+
+          entityId:
+            orderId,
+
+          previousValue: {
+            status:
+              OrderStatus.DISPUTED,
+          },
+
+          newValue: {
+            outcome,
+            finalOrderStatus,
+            note:
+              note?.trim() ||
+              null,
+          },
+        },
+      });
       await this.events.recordDisputeResolved(tx, escrow.id, { escrowAccountId: escrow.id, orderId, outcome, finalOrderStatus });
       return result;
     });
+  }
+
+  async listAdminDisputes(query?: {
+    status?: string;
+    limit?: number;
+  }) {
+    const limit = Math.min(
+      Math.max(
+        Number(query?.limit) || 100,
+        1,
+      ),
+      200,
+    );
+
+    const status =
+      query?.status
+        ?.trim()
+        .toUpperCase();
+
+    const disputeHistoryFilter = {
+      some: {
+        newStatus:
+          OrderStatus.DISPUTED,
+      },
+    };
+
+    const where: Prisma.OrderWhereInput =
+      status === 'OPEN'
+        ? {
+            status:
+              OrderStatus.DISPUTED,
+          }
+        : status === 'RESOLVED'
+          ? {
+              statusHistory:
+                disputeHistoryFilter,
+
+              status: {
+                in: [
+                  OrderStatus.REFUNDED,
+                  OrderStatus.COMPLETED,
+                ],
+              },
+            }
+          : {
+              statusHistory:
+                disputeHistoryFilter,
+            };
+
+    return this.prisma.order.findMany({
+      where,
+
+      take: limit,
+
+      orderBy: {
+        updatedAt: 'desc',
+      },
+
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            phoneCode: true,
+          },
+        },
+
+        seller: {
+          select: {
+            id: true,
+            legalName: true,
+            tradeName: true,
+          },
+        },
+
+        store: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+
+        currency: true,
+
+        items: {
+          select: {
+            id: true,
+            productTitleSnapshot: true,
+            variantNameSnapshot: true,
+            skuSnapshot: true,
+            quantity: true,
+            total: true,
+          },
+        },
+
+        escrowAccount: {
+          include: {
+            transactions: {
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
+          },
+        },
+
+        statusHistory: {
+          where: {
+            OR: [
+              {
+                newStatus:
+                  OrderStatus.DISPUTED,
+              },
+              {
+                previousStatus:
+                  OrderStatus.DISPUTED,
+              },
+            ],
+          },
+
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+
+        comments: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+
+          include: {
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
+
+        attachments: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+
+        timeline: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+
+        refunds: {
+          include: {
+            currency: true,
+          },
+
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+  }
+
+  async getAdminDispute(
+    orderId: string,
+  ) {
+    const order =
+      await this.prisma.order.findFirst({
+        where: {
+          id: orderId,
+
+          statusHistory: {
+            some: {
+              newStatus:
+                OrderStatus.DISPUTED,
+            },
+          },
+        },
+
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              phoneCode: true,
+            },
+          },
+
+          seller: {
+            select: {
+              id: true,
+              legalName: true,
+              tradeName: true,
+            },
+          },
+
+          store: true,
+
+          currency: true,
+
+          items: true,
+
+          escrowAccount: {
+            include: {
+              currency: true,
+
+              transactions: {
+                orderBy: {
+                  createdAt: 'asc',
+                },
+              },
+            },
+          },
+
+          comments: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+
+            include: {
+              author: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+
+          attachments: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+
+          timeline: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+
+          statusHistory: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+
+            include: {
+              changedBy: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+
+          refunds: {
+            include: {
+              currency: true,
+            },
+
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+        },
+      });
+
+    if (!order) {
+      throw new NotFoundException(
+        'Disputa não encontrada.',
+      );
+    }
+
+    return order;
+  }
+
+  async addAdminDisputeMessage(
+    orderId: string,
+    actorUserId: string | null,
+    message: string,
+    isPrivate = false,
+  ) {
+    const normalizedMessage =
+      message.trim();
+
+    if (!normalizedMessage) {
+      throw new BadRequestException(
+        'A mensagem não pode estar vazia.',
+      );
+    }
+
+    return this.escrowTransaction.run(
+      async (tx) => {
+        const order =
+          await tx.order.findUnique({
+            where: {
+              id: orderId,
+            },
+
+            select: {
+              id: true,
+              status: true,
+
+              statusHistory: {
+                where: {
+                  newStatus:
+                    OrderStatus.DISPUTED,
+                },
+
+                take: 1,
+              },
+            },
+          });
+
+        if (
+          !order ||
+          !order.statusHistory.length
+        ) {
+          throw new NotFoundException(
+            'Disputa não encontrada.',
+          );
+        }
+
+        const comment =
+          await tx.orderComment.create({
+            data: {
+              orderId,
+
+              authorId:
+                actorUserId ||
+                undefined,
+
+              comment:
+                normalizedMessage,
+
+              isPrivate,
+
+              metadataJson: {
+                type:
+                  'DISPUTE_MEDIATION_MESSAGE',
+
+                source:
+                  'ADMIN',
+
+                isPrivate,
+              },
+            },
+          });
+
+        await tx.orderTimeline.create({
+          data: {
+            orderId,
+
+            eventCode:
+              'DISPUTE_ADMIN_MESSAGE',
+
+            title:
+              isPrivate
+                ? 'Nota interna da mediação'
+                : 'Mensagem da mediação',
+
+            description:
+              normalizedMessage,
+
+            actorId:
+              actorUserId ||
+              undefined,
+
+            metadataJson: {
+              commentId:
+                comment.id,
+
+              isPrivate,
+            },
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            userId:
+              actorUserId ||
+              undefined,
+
+            action:
+              'DISPUTE_MESSAGE_ADDED',
+
+            entity:
+              'Order',
+
+            entityId:
+              orderId,
+
+            newValue: {
+              commentId:
+                comment.id,
+
+              isPrivate,
+            },
+          },
+        });
+
+        return comment;
+      },
+    );
   }
 
   async getEscrowByOrderId(orderId: string) {
