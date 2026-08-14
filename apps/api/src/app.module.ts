@@ -67,6 +67,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 
 import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
+import { ReturnsModule } from './modules/returns/returns.module';
 
 @Module({
   imports: [
@@ -140,6 +141,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 
     // Sprint 5.2 Fulfillment Module
     FulfillmentModule,
+    ReturnsModule,
   ],
   providers: [
     {

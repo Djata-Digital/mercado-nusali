@@ -16,6 +16,7 @@ import { AdminRefundsManager } from './admin/AdminRefundsManager';
 import { AdminPayoutsManager } from './admin/AdminPayoutsManager';
 import { AdminSettlementsManager } from './admin/AdminSettlementsManager';
 import { AdminDisputesManager } from './admin/AdminDisputesManager';
+import { AdminReturnsManager } from './admin/AdminReturnsManager';
 
 import {
   CheckCircle2,
@@ -58,7 +59,8 @@ type Tab =
   | 'refunds'
   | 'payouts'
   | 'settlements'
-  | 'disputes';
+  | 'disputes'
+  | 'returns';
 
 interface TabItem {
   id: Tab;
@@ -219,6 +221,14 @@ const tabs: TabItem[] = [
   },
 
   {
+    id: 'returns',
+    label: 'Devoluções',
+    icon: (
+      <RefreshCw className="w-4 h-4" />
+    ),
+  },
+
+  {
     id: 'refunds',
     label: 'Reembolsos',
     icon: (
@@ -292,6 +302,7 @@ const tabGroups: TabGroup[] = [
     title: 'Atendimento & Confiança',
     items: [
       'disputes',
+      'returns',
     ],
   },
 
@@ -1285,6 +1296,14 @@ React.FC = () => {
 
           {tab === 'refunds' && (
             <AdminRefundsManager
+              showToast={
+                setMessage
+              }
+            />
+          )}
+
+          {tab === 'returns' && (
+            <AdminReturnsManager
               showToast={
                 setMessage
               }
