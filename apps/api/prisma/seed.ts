@@ -716,6 +716,23 @@ async function main() {
       description:
         'Gerenciar e reprocessar eventos da DLQ',
     },
+
+    // Risk & Antifraud permissions
+    {
+      slug: 'risk:read:admin',
+      name: 'Visualizar Alertas de Risco',
+      description: 'Acessar painel e detalhes de alertas de risco e antifraude',
+    },
+    {
+      slug: 'risk:investigate:admin',
+      name: 'Investigar Alertas de Risco',
+      description: 'Atribuir analistas, alterar status e notas de alertas de risco',
+    },
+    {
+      slug: 'risk:resolve:admin',
+      name: 'Resolver Alertas de Risco',
+      description: 'Finalizar alertas como resolvidos ou falsos positivos',
+    },
   ];
 
   const permMap: Record<string, string> = {};
@@ -765,6 +782,12 @@ async function main() {
       'kyc:approve',
     ],
 
+    RISK_ANALYST: [
+      'risk:read:admin',
+      'risk:investigate:admin',
+      'risk:resolve:admin',
+    ],
+
     ADMIN: [
       'seller:read:any',
       'seller:approve',
@@ -776,6 +799,9 @@ async function main() {
       'manage_sellers',
       'manage_kyc',
       'order:read:any',
+      'risk:read:admin',
+      'risk:investigate:admin',
+      'risk:resolve:admin',
     ],
 
     GLOBAL_ADMIN: [
@@ -804,6 +830,9 @@ async function main() {
       'logistics_exception:read',
       'logistics_exception:manage',
       'carrier_webhook:process',
+      'risk:read:admin',
+      'risk:investigate:admin',
+      'risk:resolve:admin',
     ],
   };
 

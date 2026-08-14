@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   LedgerAccountType,
   PayoutStatus,
@@ -20,7 +21,10 @@ export type PayoutReconciliationResult = {
 
 @Injectable()
 export class PayoutReconciliationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventEmitter?: EventEmitter2,
+  ) {}
 
   async reconcileOne(payoutId: string): Promise<PayoutReconciliationResult> {
     const payout = await this.prisma.payout.findUnique({
@@ -91,7 +95,7 @@ export class PayoutReconciliationService {
       if (validPayoutLedger.length !== 0) issues.push('LEDGER_ON_TERMINAL_FAILURE');
     }
 
-    return {
+    const result: PayoutReconciliationResult = {
       payoutId: payout.id,
       status: payout.status,
       consistent: issues.length === 0,
@@ -100,6 +104,14 @@ export class PayoutReconciliationService {
       payoutDebitCount,
       ledgerCount: validPayoutLedger.length,
     };
+
+    try {
+      this.eventEmitter?.emit('payout.reconciliation.completed', result);
+    } catch (err) {
+      // Nao interromper reconciliacao se o evento falhar
+    }
+
+    return result;
   }
 
   async listInconsistent(limit = 50) {

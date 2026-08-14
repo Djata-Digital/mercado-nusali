@@ -8,90 +8,94 @@ datasource db {
 }
 
 model User {
-  id                      String                   @id @default(uuid())
-  firstName               String
-  lastName                String
-  email                   String                   @unique
-  phone                   String                   @unique
-  phoneCode               String
-  passwordHash            String
-  status                  String                   @default("active")
-  isEmailVerified         Boolean                  @default(false)
-  isPhoneVerified         Boolean                  @default(false)
-  sellerOnboardingStatus  String?
-  countryId               String?
-  country                 Country?                 @relation(fields: [countryId], references: [id])
-  preferredCurrencyId     String?
-  preferredCurrency       Currency?                @relation(fields: [preferredCurrencyId], references: [id])
-  preferredLanguageId     String?
-  preferredLanguage       Language?                @relation(fields: [preferredLanguageId], references: [id])
-  roles                   UserRole[]
-  refreshTokens           RefreshToken[]
-  verificationTokens      VerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
-  sessions                Session[]
-  auditLogs               AuditLog[]
-  sellerProfile           SellerProfile?
-  reviewedDocuments       SellerDocument[]         @relation("DocumentReviewer")
-  kycReviews              SellerKycReview[]        @relation("KycReviewer")
-  storeMembers            StoreMember[]
-  invitedStoreMembers     StoreMember[]            @relation("StoreMemberInviter")
-  sentStoreInvitations    StoreInvitation[]        @relation("StoreInviter")
-  managedWarehouses       Warehouse[]              @relation("WarehouseManager")
-  inventoryMovements      InventoryMovement[]      @relation("MovementCreator")
-  addresses               Address[]
-  carts                   Cart[]
-  couponsCreated          Coupon[]                 @relation("CouponCreator")
-  couponRules             CouponRule[]
-  couponRedemptions       CouponRedemption[]
-  checkoutSessions        CheckoutSession[]
-  orderGroups             OrderGroup[]
-  orders                  Order[]
-  statusChanges           OrderStatusHistory[]     @relation("StatusChanger")
-  stockReservations       StockReservation[]
-  wallet                  Wallet?
-  paymentIntents          PaymentIntent[]
-  payments                Payment[]
-  escrowAccountsAsBuyer   EscrowAccount[]          @relation("BuyerEscrow")
-  refunds                 Refund[]
-  createdShipments        InboundShipment[]        @relation("ShipmentCreator")
-  inspectedShipments      ReceivingInspection[]    @relation("ShipmentInspector")
-  changedReceivingHistory ReceivingHistory[]       @relation("ShipmentHistoryChanger")
-  requestedTransfers      TransferOrder[]          @relation("TransferRequester")
-  approvedTransfers       TransferOrder[]          @relation("TransferApprover")
-  changedTransferHistory  TransferHistory[]        @relation("TransferHistoryChanger")
-  warehouseMovementsMover WarehouseMovement[]      @relation("MovementMover")
-  assignedCycleCounts     CycleCount[]             @relation("CycleCountAuditor")
-  pickingOrdersAssigned   PickingOrder[]           @relation("PickingOperator")
-  pickingBatchesAssigned  PickingBatch[]           @relation("BatchOperator")
-  pickingHistories        PickingHistory[]         @relation("PickingHistoryChanger")
-  pickingItemsPicked      PickingItem[]            @relation("PickingItemPicker")
-  packingOrdersAssigned   PackingOrder[]           @relation("PackingOperator")
-  packingHistories        PackingHistory[]         @relation("PackingHistoryChanger")
-  manifestsCreated        ShippingManifest[]       @relation("ManifestCreator")
-  shipmentHistories       ShipmentHistory[]        @relation("ShipmentHistoryChanger")
-  labelPrintHistories     ShippingLabelHistory[]   @relation("LabelPrinter")
-  trackingStatusChanges   TrackingStatusHistory[]  @relation("TrackingStatusChanger")
-  pickupHistories         PickupHistory[]          @relation("PickupHistoryChanger")
-  deliveryHistories       DeliveryHistory[]        @relation("DeliveryHistoryChanger")
-  podDeliveries           ProofOfDelivery[]        @relation("PODDeliverer")
-  podHistories            ProofOfDeliveryHistory[] @relation("PODHistoryActor")
-  driverProfile           LogisticsDriver?
-  routeHistories          DeliveryRouteHistory[]   @relation("RouteHistoryChanger")
-  reportedExceptions      LogisticsException[]     @relation("ExceptionReporter")
-  assignedExceptions      LogisticsException[]     @relation("ExceptionAssignee")
-  tempPodUploads          TemporaryPodUpload[]     @relation("TempPodUploader")
-  orderTimelineEvents     OrderTimeline[]          @relation("OrderTimelineActor")
-  orderComments           OrderComment[]           @relation("OrderCommentAuthor")
-  orderAttachments        OrderAttachment[]        @relation("OrderAttachmentUploader")
-  returnRequestsAsBuyer   ReturnRequest[]          @relation("ReturnBuyer")
-  returnHistoryChanges    ReturnHistory[]          @relation("ReturnHistoryChanger")
-  supportTicketsRequested SupportTicket[]          @relation("SupportRequester")
-  supportTicketsAssigned  SupportTicket[]          @relation("SupportAssignee")
-  supportMessagesSent     SupportMessage[]         @relation("SupportMessageSender")
-  supportHistoryChanges   SupportTicketHistory[]   @relation("SupportHistoryChanger")
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  id                          String                   @id @default(uuid())
+  firstName                   String
+  lastName                    String
+  email                       String                   @unique
+  phone                       String                   @unique
+  phoneCode                   String
+  passwordHash                String
+  status                      String                   @default("active")
+  isEmailVerified             Boolean                  @default(false)
+  isPhoneVerified             Boolean                  @default(false)
+  sellerOnboardingStatus      String?
+  countryId                   String?
+  country                     Country?                 @relation(fields: [countryId], references: [id])
+  preferredCurrencyId         String?
+  preferredCurrency           Currency?                @relation(fields: [preferredCurrencyId], references: [id])
+  preferredLanguageId         String?
+  preferredLanguage           Language?                @relation(fields: [preferredLanguageId], references: [id])
+  roles                       UserRole[]
+  refreshTokens               RefreshToken[]
+  verificationTokens          VerificationToken[]
+  passwordResetTokens         PasswordResetToken[]
+  sessions                    Session[]
+  auditLogs                   AuditLog[]
+  sellerProfile               SellerProfile?
+  reviewedDocuments           SellerDocument[]         @relation("DocumentReviewer")
+  kycReviews                  SellerKycReview[]        @relation("KycReviewer")
+  storeMembers                StoreMember[]
+  invitedStoreMembers         StoreMember[]            @relation("StoreMemberInviter")
+  sentStoreInvitations        StoreInvitation[]        @relation("StoreInviter")
+  managedWarehouses           Warehouse[]              @relation("WarehouseManager")
+  inventoryMovements          InventoryMovement[]      @relation("MovementCreator")
+  addresses                   Address[]
+  carts                       Cart[]
+  couponsCreated              Coupon[]                 @relation("CouponCreator")
+  couponRules                 CouponRule[]
+  couponRedemptions           CouponRedemption[]
+  checkoutSessions            CheckoutSession[]
+  orderGroups                 OrderGroup[]
+  orders                      Order[]
+  statusChanges               OrderStatusHistory[]     @relation("StatusChanger")
+  stockReservations           StockReservation[]
+  wallet                      Wallet?
+  paymentIntents              PaymentIntent[]
+  payments                    Payment[]
+  escrowAccountsAsBuyer       EscrowAccount[]          @relation("BuyerEscrow")
+  refunds                     Refund[]
+  createdShipments            InboundShipment[]        @relation("ShipmentCreator")
+  inspectedShipments          ReceivingInspection[]    @relation("ShipmentInspector")
+  changedReceivingHistory     ReceivingHistory[]       @relation("ShipmentHistoryChanger")
+  requestedTransfers          TransferOrder[]          @relation("TransferRequester")
+  approvedTransfers           TransferOrder[]          @relation("TransferApprover")
+  changedTransferHistory      TransferHistory[]        @relation("TransferHistoryChanger")
+  warehouseMovementsMover     WarehouseMovement[]      @relation("MovementMover")
+  assignedCycleCounts         CycleCount[]             @relation("CycleCountAuditor")
+  pickingOrdersAssigned       PickingOrder[]           @relation("PickingOperator")
+  pickingBatchesAssigned      PickingBatch[]           @relation("BatchOperator")
+  pickingHistories            PickingHistory[]         @relation("PickingHistoryChanger")
+  pickingItemsPicked          PickingItem[]            @relation("PickingItemPicker")
+  packingOrdersAssigned       PackingOrder[]           @relation("PackingOperator")
+  packingHistories            PackingHistory[]         @relation("PackingHistoryChanger")
+  manifestsCreated            ShippingManifest[]       @relation("ManifestCreator")
+  shipmentHistories           ShipmentHistory[]        @relation("ShipmentHistoryChanger")
+  labelPrintHistories         ShippingLabelHistory[]   @relation("LabelPrinter")
+  trackingStatusChanges       TrackingStatusHistory[]  @relation("TrackingStatusChanger")
+  pickupHistories             PickupHistory[]          @relation("PickupHistoryChanger")
+  deliveryHistories           DeliveryHistory[]        @relation("DeliveryHistoryChanger")
+  podDeliveries               ProofOfDelivery[]        @relation("PODDeliverer")
+  podHistories                ProofOfDeliveryHistory[] @relation("PODHistoryActor")
+  driverProfile               LogisticsDriver?
+  routeHistories              DeliveryRouteHistory[]   @relation("RouteHistoryChanger")
+  reportedExceptions          LogisticsException[]     @relation("ExceptionReporter")
+  assignedExceptions          LogisticsException[]     @relation("ExceptionAssignee")
+  tempPodUploads              TemporaryPodUpload[]     @relation("TempPodUploader")
+  orderTimelineEvents         OrderTimeline[]          @relation("OrderTimelineActor")
+  orderComments               OrderComment[]           @relation("OrderCommentAuthor")
+  orderAttachments            OrderAttachment[]        @relation("OrderAttachmentUploader")
+  returnRequestsAsBuyer       ReturnRequest[]          @relation("ReturnBuyer")
+  returnHistoryChanges        ReturnHistory[]          @relation("ReturnHistoryChanger")
+  supportTicketsRequested     SupportTicket[]          @relation("SupportRequester")
+  supportTicketsAssigned      SupportTicket[]          @relation("SupportAssignee")
+  supportMessagesSent         SupportMessage[]         @relation("SupportMessageSender")
+  supportHistoryChanges       SupportTicketHistory[]   @relation("SupportHistoryChanger")
+  riskAlerts                  RiskAlert[]              @relation("RiskAlertUser")
+  assignedRiskAlerts          RiskAlert[]              @relation("RiskAlertAssignee")
+  resolvedRiskAlerts          RiskAlert[]              @relation("RiskAlertResolver")
+  performedRiskAlertHistories RiskAlertHistory[]       @relation("RiskAlertHistoryPerformer")
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
 
   @@map("users")
 }
@@ -515,6 +519,7 @@ model SellerProfile {
   escrowAccounts     EscrowAccount[]
   payouts            Payout[]
   returnRequests     ReturnRequest[]
+  riskAlerts         RiskAlert[]
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   deletedAt          DateTime?
@@ -1291,6 +1296,7 @@ model Order {
   shipments                Shipment[]
   returnRequests           ReturnRequest[]
   supportTickets           SupportTicket[]
+  riskAlerts               RiskAlert[]
   placedAt                 DateTime              @default(now())
   expiresAt                DateTime?
   cancelledAt              DateTime?
@@ -1648,6 +1654,7 @@ model Payment {
   attempts              PaymentAttempt[]
   events                PaymentEvent[]
   refunds               Refund[]
+  riskAlerts            RiskAlert[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -1798,6 +1805,7 @@ model Payout {
   items                   PayoutItem[]
   settlement              SellerSettlement?
   processedAt             DateTime?
+  riskAlerts              RiskAlert[]
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
 
@@ -3849,4 +3857,116 @@ model SupportTicketHistory {
   @@index([ticketId])
   @@index([newStatus])
   @@map("support_ticket_histories")
+}
+
+// ==========================================
+// RISK & ANTIFRAUD MODULE
+// ==========================================
+
+enum RiskAlertType {
+  SUSPICIOUS_PAYMENT
+  MULTIPLE_ACCOUNTS
+  DOCUMENT_INCONSISTENCY
+  HIGH_RISK_PAYOUT
+  NEW_SELLER_HIGH_VOLUME
+  CHARGEBACK
+  SUSPICIOUS_ADDRESS
+  LOGISTICS_FRAUD
+  COUNTERFEIT_SUSPECTED
+  PAYOUT_RECONCILIATION
+  ACCOUNT_TAKEOVER
+  OTHER
+}
+
+enum RiskAlertStatus {
+  OPEN
+  INVESTIGATING
+  BLOCKED
+  RELEASED
+  MONITORING
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskEntityType {
+  USER
+  SELLER
+  STORE
+  ORDER
+  PAYMENT
+  PAYOUT
+  PRODUCT
+  SHIPMENT
+}
+
+model RiskAlert {
+  id           String          @id @default(uuid())
+  type         RiskAlertType
+  severity     RiskSeverity
+  status       RiskAlertStatus @default(OPEN)
+  riskScore    Int
+  entityType   RiskEntityType
+  entityId     String?
+  userId       String?
+  user         User?           @relation("RiskAlertUser", fields: [userId], references: [id], onDelete: SetNull)
+  sellerId     String?
+  seller       SellerProfile?  @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  orderId      String?
+  order        Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  paymentId    String?
+  payment      Payment?        @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  payoutId     String?
+  payout       Payout?         @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  title        String
+  description  String
+  country      String?
+  source       String?
+  ruleCode     String?
+  dedupeKey    String?
+  metadata     Json?
+  detectedAt   DateTime        @default(now())
+  assignedToId String?
+  assignedTo   User?           @relation("RiskAlertAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?           @relation("RiskAlertResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolution   String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  history RiskAlertHistory[]
+
+  @@index([status])
+  @@index([severity])
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([sellerId])
+  @@index([ruleCode])
+  @@index([dedupeKey])
+  @@map("risk_alerts")
+}
+
+model RiskAlertHistory {
+  id            String           @id @default(uuid())
+  riskAlertId   String
+  riskAlert     RiskAlert        @relation(fields: [riskAlertId], references: [id], onDelete: Cascade)
+  action        String
+  note          String?
+  oldStatus     RiskAlertStatus?
+  newStatus     RiskAlertStatus?
+  performedById String?
+  performedBy   User?            @relation("RiskAlertHistoryPerformer", fields: [performedById], references: [id], onDelete: SetNull)
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+
+  @@index([riskAlertId])
+  @@map("risk_alert_histories")
 }

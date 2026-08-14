@@ -69,6 +69,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { ReturnsModule } from './modules/returns/returns.module';
 import { SupportModule } from './modules/support/support.module';
+import { RiskModule } from './modules/risk/risk.module';
 
 @Module({
   imports: [
@@ -144,6 +145,7 @@ import { SupportModule } from './modules/support/support.module';
     FulfillmentModule,
     ReturnsModule,
     SupportModule,
+    RiskModule,
   ],
   providers: [
     {

@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
+    private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async register(dto: RegisterDto, reqInfo: RequestInfo) {
@@ -127,6 +129,18 @@ export class AuthService {
       },
     });
 
+    try {
+      this.eventEmitter?.emit('auth.session.created', {
+        userId: user.id,
+        sessionId: session.id,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        country: session.country,
+      });
+    } catch (err: any) {
+      // Nao falhar cadastro se emissao do evento falhar
+    }
+
     // 2. Generate Tokens linked to Session
     const tokens = await this.generateTokenPair(
       userDto.id,
@@ -181,6 +195,18 @@ export class AuthService {
         country: reqInfo.country,
       },
     });
+
+    try {
+      this.eventEmitter?.emit('auth.session.created', {
+        userId: user.id,
+        sessionId: session.id,
+        ipAddress: session.ipAddress,
+        userAgent: session.userAgent,
+        country: session.country,
+      });
+    } catch (err: any) {
+      // Nao falhar login se emissao do evento falhar
+    }
 
     // 2. Generate Tokens linked to Session
     const tokens = await this.generateTokenPair(
