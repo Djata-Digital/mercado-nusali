@@ -86,6 +86,10 @@ model User {
   orderAttachments        OrderAttachment[]        @relation("OrderAttachmentUploader")
   returnRequestsAsBuyer   ReturnRequest[]          @relation("ReturnBuyer")
   returnHistoryChanges    ReturnHistory[]          @relation("ReturnHistoryChanger")
+  supportTicketsRequested SupportTicket[]          @relation("SupportRequester")
+  supportTicketsAssigned  SupportTicket[]          @relation("SupportAssignee")
+  supportMessagesSent     SupportMessage[]         @relation("SupportMessageSender")
+  supportHistoryChanges   SupportTicketHistory[]   @relation("SupportHistoryChanger")
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
@@ -1286,6 +1290,7 @@ model Order {
   packingOrders            PackingOrder[]
   shipments                Shipment[]
   returnRequests           ReturnRequest[]
+  supportTickets           SupportTicket[]
   placedAt                 DateTime              @default(now())
   expiresAt                DateTime?
   cancelledAt              DateTime?
@@ -3669,8 +3674,9 @@ model ReturnRequest {
   refundId String? @unique
   refund   Refund? @relation(fields: [refundId], references: [id])
 
-  items   ReturnItem[]
-  history ReturnHistory[]
+  items          ReturnItem[]
+  history        ReturnHistory[]
+  supportTickets SupportTicket[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3722,4 +3728,125 @@ model ReturnHistory {
   @@index([returnRequestId])
   @@index([newStatus])
   @@map("return_histories")
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum SupportTicketCategory {
+  ORDER
+  PAYMENT
+  RETURN
+  DISPUTE
+  SELLER_ACCOUNT
+  DELIVERY
+  TECHNICAL
+  OTHER
+}
+
+enum SupportMessageSenderType {
+  CUSTOMER
+  AGENT
+  SYSTEM
+}
+
+model SupportTicket {
+  id           String @id @default(uuid())
+  ticketNumber String @unique
+
+  requesterId String
+  requester   User   @relation("SupportRequester", fields: [requesterId], references: [id])
+
+  assignedToId String?
+  assignedTo   User?   @relation("SupportAssignee", fields: [assignedToId], references: [id])
+
+  status   SupportTicketStatus   @default(OPEN)
+  priority SupportTicketPriority @default(NORMAL)
+  category SupportTicketCategory
+
+  subject     String
+  description String
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  returnRequestId String?
+  returnRequest   ReturnRequest? @relation(fields: [returnRequestId], references: [id])
+
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  lastMessageAt   DateTime  @default(now())
+
+  messages SupportMessage[]
+  history  SupportTicketHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([requesterId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([orderId])
+  @@index([returnRequestId])
+  @@index([lastMessageAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  senderId String?
+  sender   User?   @relation("SupportMessageSender", fields: [senderId], references: [id])
+
+  senderType SupportMessageSenderType
+
+  message    String
+  isInternal Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@map("support_messages")
+}
+
+model SupportTicketHistory {
+  id String @id @default(uuid())
+
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  previousStatus SupportTicketStatus?
+  newStatus      SupportTicketStatus
+
+  changedById String?
+  changedBy   User?   @relation("SupportHistoryChanger", fields: [changedById], references: [id])
+
+  reason       String?
+  metadataJson Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([newStatus])
+  @@map("support_ticket_histories")
 }

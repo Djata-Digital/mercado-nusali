@@ -17,6 +17,7 @@ import { AdminPayoutsManager } from './admin/AdminPayoutsManager';
 import { AdminSettlementsManager } from './admin/AdminSettlementsManager';
 import { AdminDisputesManager } from './admin/AdminDisputesManager';
 import { AdminReturnsManager } from './admin/AdminReturnsManager';
+import { AdminSupportTickets } from './admin/AdminSupportTickets';
 
 import {
   CheckCircle2,
@@ -31,6 +32,7 @@ import {
   Store,
   Truck,
   Users,
+  LifeBuoy,
   XCircle,
 } from 'lucide-react';
 
@@ -60,7 +62,8 @@ type Tab =
   | 'payouts'
   | 'settlements'
   | 'disputes'
-  | 'returns';
+  | 'returns'
+  | 'support';
 
 interface TabItem {
   id: Tab;
@@ -259,6 +262,14 @@ const tabs: TabItem[] = [
       <History className="w-4 h-4" />
     ),
   },
+
+  {
+    id: 'support',
+    label: 'Suporte',
+    icon: (
+      <LifeBuoy className="w-4 h-4" />
+    ),
+  },
 ];
 
 const tabGroups: TabGroup[] = [
@@ -303,6 +314,7 @@ const tabGroups: TabGroup[] = [
     items: [
       'disputes',
       'returns',
+      'support',
     ],
   },
 
@@ -1304,6 +1316,14 @@ React.FC = () => {
 
           {tab === 'returns' && (
             <AdminReturnsManager
+              showToast={
+                setMessage
+              }
+            />
+          )}
+
+          {tab === 'support' && (
+            <AdminSupportTickets
               showToast={
                 setMessage
               }
